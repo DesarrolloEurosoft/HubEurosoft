@@ -1,0 +1,30 @@
+# Ignorar archivos locales y configuraciones de base de datos
+config/database.php
+config/database_local.php
+config/database_vps.php
+config/database_*.php
+
+# Ignorar archivos subidos por usuarios (imágenes de perfil, respuestas)
+uploads/
+assets/uploads/
+
+# Ignorar logs y caches
+.cache/
+logs/
+*.log
+
+# Ignorar archivos temporales, zips y scripts de pruebas que creamos
+*.zip
+*.tar.gz
+test_*.php
+db_export.php
+db_dump_to_file.php
+debug_*.php
+fix_*.php
+hotfix_*.php
+remote_fix*.php
+update_*.php
+
+# Ignorar archivos del OS
+.DS_Store
+Thumbs.db

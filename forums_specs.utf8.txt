@@ -1,0 +1,459 @@
+
+EUROSOFT HUB FORUMS 
+
+
+
+4. Community and Forums – Final Conceptual and Technical Description
+
+
+
+4.1 General Purpose of Forums in the Eurosoft Hub
+
+The Eurosoft Hub forums are not social forums, nor do they aim to replicate community-style interaction or typical social network dynamics.
+
+In the Hub, forums play an operational, methodological, and strategic role designed to ensure that organizations —especially those with multiple geographically dispersed units— achieve:
+
+Correct implementation of the Eurosoft Suite
+
+Adoption and standardization of good practices
+
+Process homologation across units
+
+Resolution of methodological and functional questions
+
+Continuous support
+
+Consolidation of applied learning
+
+In other words:
+
+forums are the tool that ensures knowledge is applied, not merely learned in a course, and that it becomes real practices within the organization.
+
+
+
+4.2 Types of Forums and Their Function
+
+a) General Role-Based Forums
+
+These forums connect users who perform the same role, regardless of their company or unit.
+
+Purpose:
+
+Align work criteria by role
+
+Resolve common methodological questions
+
+Ensure consistent interpretation
+
+Enable transversal learning
+
+Eurosoft moderates these spaces to ensure methodological coherence.
+
+
+
+b) Company and Unit Forums
+
+These are internal spaces where only users from the same company or the same operational unit participate.
+
+Purpose:
+
+Internal system operation
+
+Communicating instructions
+
+Resolving local issues
+
+Coordinating daily progress
+
+Maintaining alignment across units
+
+These forums help all units advance in a homogeneous and coordinated manner.
+
+c) Curated Good Practices Forums
+
+These are the most strategic forums in the Hub.
+
+Only content validated by Eurosoft or by the client’s System Leader is published here, such as:
+
+Solutions successfully applied
+
+Replicable operational practices
+
+Lessons learned
+
+Key guidance for the organization
+
+The purpose is to turn project-generated knowledge into institutional knowledge, available to all business units.
+
+This is one of the key elements that justifies the annual subscription renewal:
+
+continuous access to validated, useful, and applicable content.
+
+4.3 Relationship Between Forums and Gamification
+
+Forums are the core driver of gamification because:
+
+Active participation
+
+Validated answers
+
+Positive mentions
+
+Improvement proposals
+
+Regulated “likes”
+
+Publication of good practices
+
+…all trigger badges, and badges generate points that feed the Motivation Rankings.
+
+
+
+Gamification in the Hub does not reward superficial activity. It rewards:
+
+Contributions that help others
+
+Useful knowledge
+
+Correct responses
+
+Continuous improvement
+
+Disciplined participation
+
+Real improvement proposals
+
+
+
+4.4 Why Eurosoft Hub Forums Are NOT Traditional Forums
+
+Traditional / Social Forums
+
+Eurosoft Hub Forums
+
+Focus on interaction
+
+Focus on implementation
+
+Likes based on sympathy
+
+Likes regulated and limited
+
+Casual conversation
+
+Technical and applicable conversation
+
+No validation required
+
+Validation by responsible roles
+
+Not related to real work
+
+Directly related to operational practices
+
+Does not impact processes
+
+Ensures process homologation
+
+No technical gamification
+
+Gamification tied to real contributions
+
+Hub forums are designed to accelerate implementation, strengthen applied knowledge, and align all units within an organization.
+
+4.5 NEW FUNCTIONALITY: Manual Thread Classification
+
+4.5.1 Conceptual Purpose
+
+To prevent forums from becoming disorganized or social spaces—and to preserve their operational and methodological purpose—a structured manual classification system is required.
+
+This classification makes it possible to:
+
+organize knowledge,
+
+accelerate moderation,
+
+enable content-type analysis,
+
+correctly link gamification triggers,
+
+ensure badges are assigned correctly,
+
+and build a searchable, category-based knowledge repository.
+
+Manual classification is essential for ensuring that forums operate as tools for homologation and operational support, not as social environments.
+
+To support these responsibilities, Eurosoft requires an exclusive moderation panel embedded inside the Eurosoft Administration Panel.
+
+This ensures that Eurosoft has a centralized, secure, and privileged interface to:
+
+control all forum activity,
+
+validate contributions,
+
+reclassify threads,
+
+manage gamification triggers,
+
+detect abuse or misuse,
+
+monitor activity per company and per unit,
+
+and preserve the integrity of the operational knowledge.
+
+
+
+4.5.2 Functionality (User View)
+
+When creating a new topic, the user must select one of the following thread types:
+
+Duda metodológica
+
+Duda sobre la Suite
+
+Instrucción del cliente
+
+Propuesta de mejora
+
+Buena práctica (pendiente de validación)
+
+Comunicación general
+
+The selected type determines:
+
+how the thread is processed,
+
+gamification triggers,
+
+visibility in dashboards,
+
+follow-up processes,
+
+moderation requirements,
+
+its impact on good practices,
+
+how it feeds KPIs and Rankings.
+
+
+
+4.5.3 Manual Validation
+
+Eurosoft and the client’s System Leaders must have access to two formal validation actions:
+
+a) “Mark as helpful answer”
+
+available only to Eurosoft and client leaders
+
+assigns points
+
+assigns the corresponding badge
+
+logs the action
+
+may mark the thread as resolved
+
+b) “Validate good practice”
+
+Once a good practice is approved:
+
+points must be assigned
+
+the corresponding badge must be granted
+
+the thread must be moved/copied to the Good Practices Forum
+
+the validation must be logged as an official validated practice
+
+
+
+4.5.4 Technical Requirements
+
+Mandatory tipo_de_hilo field stored as post meta
+
+Quick actions:
+
+validar_respuesta_util()
+
+validar_buena_practica()
+
+reclasificar_tipo_de_hilo()
+
+Full GamiPress integration
+
+Abuse-prevention rules:
+
+no self-likes
+
+maximum likes per user
+
+likes must come from different users
+
+validations restricted to authorized roles
+
+logging and reversible points
+
+Full compatibility with the Eurosoft Moderation Panel
+
+
+
+4.6 NEW FUNCTIONALITY: Internal Eurosoft Moderation Panel
+
+4.6.1 Conceptual Purpose
+
+Eurosoft is not a regular user.
+
+Eurosoft’s role is to serve as:
+
+methodological moderator,
+
+validator of good practices,
+
+supervisor of response quality,
+
+guarantor of standardization across units,
+
+technical authority for the methodology,
+
+central pillar of the multi-company model.
+
+To fulfill these responsibilities, Eurosoft requires an exclusive moderation panel that:
+
+centralizes moderation activities,
+
+facilitates validation,
+
+enables thread reclassification,
+
+controls gamification-related actions,
+
+detects abuse,
+
+shows activity per company/unit,
+
+and preserves the integrity of shared knowledge.
+
+
+
+
+
+4.6.2 Functionality (Eurosoft View)
+
+A dedicated menu must be added:
+
+“Eurosoft Moderation”
+
+This panel must allow:
+
+a) Centralized Thread List
+
+With filters for:
+
+Company
+
+Unit
+
+Author role
+
+Thread type
+
+Status
+
+Date
+
+User
+
+Activity level
+
+b) Quick Actions
+
+Validate helpful answer
+
+Validate good practice
+
+Reclassify thread type
+
+Review likes and suspicious activity patterns
+
+Reverse points when needed
+
+View gamification logs
+
+c) Activity View by Company and Unit
+
+Indicators should include:
+
+number of Duda metodológica threads
+
+number of Duda sobre la Suite threads
+
+validated good practices
+
+improvement proposals
+
+unanswered threads
+
+temporal activity
+
+average response time
+
+
+
+
+
+4.6.3 Technical Requirements
+
+Custom implementation using WP_List_Table
+
+GamiPress integration for:
+
+point assignment
+
+point reversal
+
+badge triggers
+
+action logging
+
+Strict security:
+
+accessible only to Eurosoft
+
+invisible to all client users
+
+Filtering based on empresa_id and unidad_id
+
+Internal logs for audit and traceability
+
+
+
+
+
+4.7 Strategic Role of Forums in the Annual Subscription Model
+
+Training has a natural limit.
+
+Once users complete their courses, the ongoing value must come from interaction and applied knowledge.
+
+Annual renewal depends on forums enabling:
+
+continuous support,
+
+real-world problem solving,
+
+standardization across units,
+
+operational alignment,
+
+documentation of good practices,
+
+decision-making based on real conversations.
+
+Thus, forums are the backbone of long-term value in the Eurosoft Hub.
+
+
+
+4.8 Conclusion
+
+The combination of forums + classification + validation + gamification + Eurosoft Moderation Panel turns the Hub into a living system of continuous learning and standardization.
+

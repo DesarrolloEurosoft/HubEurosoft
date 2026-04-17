@@ -1,0 +1,401 @@
+<?php
+session_start();
+require 'config/database.php'; // Importar conexión PDO
+
+$error = '';
+
+// Procesamiento de login real a la Base de Datos
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $email = trim($_POST['email'] ?? '');
+    $password = $_POST['password'] ?? '';
+    
+    try {
+        // Obtenemos los datos del usuario y también el estado isActive de su empresa (companyActive)
+        $stmt = $pdo->prepare("
+            SELECT u.*, c.isActive as companyActive 
+            FROM User u 
+            LEFT JOIN Company c ON u.companyId = c.id 
+            WHERE u.email = ? LIMIT 1
+        ");
+        $stmt->execute([$email]);
+        $user = $stmt->fetch();
+
+        // Verificar la contraseña encriptada (bcrypt)
+        if ($user && password_verify($password, $user['passwordHash'])) {
+            
+            // Si no es SuperAdmin, verificar que su empresa no esté suspendida
+            if ($user['role'] !== 'ADMIN' && isset($user['companyActive']) && $user['companyActive'] == 0) {
+                $error = "El acceso para tu institución ha sido temporalmente suspendido.";
+            } else {
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['user_name'] = $user['name'];
+                $_SESSION['user_role'] = $user['role'];
+                $_SESSION['user_email'] = $user['email'];
+                $_SESSION['user_company'] = $user['companyId'];
+                $_SESSION['user_bu'] = $user['businessUnitId'];
+            
+            // ----------- BITÁCORA DE ACCESOS (TRACKING) -----------
+            if (!function_exists('generateCuid')) {
+                function generateCuid() { return 'c' . uniqid() . bin2hex(random_bytes(2)); }
+            }
+            
+            // Obtener IP Real
+            $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+            $ip = explode(',', $ip)[0]; // Limpiar proxy múltiple
+            
+            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown Device';
+            
+            try {
+                // --- CALCULAR RACHA (STREAK) ANTES DE INSERTAR EL LOG DE HOY ---
+                $checkToday = $pdo->prepare("SELECT COUNT(*) FROM LoginLog WHERE userId = ? AND DATE(createdAt) = CURDATE()");
+                $checkToday->execute([$user['id']]);
+                if ($checkToday->fetchColumn() == 0) {
+                    // No se ha logueado hoy. ¿Se logueó ayer?
+                    $checkYesterday = $pdo->prepare("SELECT COUNT(*) FROM LoginLog WHERE userId = ? AND DATE(createdAt) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)");
+                    $checkYesterday->execute([$user['id']]);
+                    if ($checkYesterday->fetchColumn() > 0) {
+                        // Racha continua
+                        $pdo->prepare("UPDATE User SET streakCount = streakCount + 1 WHERE id = ?")->execute([$user['id']]);
+                    } else {
+                        // Racha se reinicia
+                        $pdo->prepare("UPDATE User SET streakCount = 1 WHERE id = ?")->execute([$user['id']]);
+                    }
+                }
+                // -------------------------------------------------------------
+
+                $stmtLog = $pdo->prepare("INSERT INTO LoginLog (id, userId, ipAddress, userAgent, createdAt) VALUES (?, ?, ?, ?, NOW())");
+                $stmtLog->execute([generateCuid(), $user['id'], trim($ip), substr($userAgent, 0, 500)]);
+                
+                // --- GAMIFICATION: DAILY_LOGIN ---
+                $ruleDaily = $pdo->query("SELECT points FROM GamificationRule WHERE actionType = 'DAILY_LOGIN' AND isActive = 1")->fetch();
+                if ($ruleDaily) {
+                    $ptsDaily = (int)$ruleDaily['points'];
+                    // Verifica si ya se logueó hoy (buscando puntos otorgados hoy)
+                    $chkDaily = $pdo->prepare("SELECT COUNT(*) FROM UserPoints WHERE userId = ? AND actionType = 'DAILY_LOGIN' AND DATE(createdAt) = CURDATE()");
+                    $chkDaily->execute([$user['id']]);
+                    if ($chkDaily->fetchColumn() == 0) {
+                        $pdo->prepare("INSERT INTO UserPoints (id, userId, points, actionType, description, createdAt) VALUES (?, ?, ?, 'DAILY_LOGIN', 'Recompensa de Acceso Diario', NOW())")->execute([generateCuid(), $user['id'], $ptsDaily]);
+                        // Opcional: Sumar al totalPoints del usuario
+                        $pdo->prepare("UPDATE User SET totalPoints = totalPoints + ? WHERE id = ?")->execute([$ptsDaily, $user['id']]);
+                    }
+                }
+                // ---------------------------------
+            } catch (Exception $e) {
+                error_log("Error guardando bitácora de acceso: " . $e->getMessage());
+            }
+            
+            require_once 'utils/assignment_sync.php';
+            syncAllCourseAssignments($pdo, $user['id']);
+            
+            require_once 'utils/gamification_engine.php';
+            evaluateUserAchievements($pdo, $user['id']);
+            // ------------------------------------------------------
+
+            header('Location: index.php');
+            exit;
+            } // Cerramos la verificación de companyActive
+        } else {
+            $error = "Credenciales incorrectas. Verifica tu correo y contraseña.";
+        }
+    } catch (PDOException $e) {
+        $error = "Error al conectar con la base de datos: Asegúrate de correr setup.php primero.";
+    }
+}
+?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión - HubEurosoft</title>
+    <link rel="icon" type="image/png" href="assets/images/favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <style>
+        :root {
+            --bg-body: #f3f4f6;
+            --bg-card: #151b2b; /* Dark Navy similar to image */
+            --primary: #f97316;
+            --primary-hover: #ea580c;
+            --input-bg: #f8fafc;
+            --text-light: #9ca3af;
+            --text-white: #ffffff;
+            --border-radius: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-body);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Top Logo Space */
+        .brand-logo {
+            margin-bottom: 0.5rem;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+        }
+        
+        .brand-logo img {
+            max-height: 180px; /* Compensating for large canvas margins */
+            object-fit: contain;
+        }
+
+        .auth-card {
+            background-color: var(--bg-card);
+            width: 100%;
+            max-width: 420px;
+            border-radius: 16px;
+            padding: 2.5rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            position: relative;
+        }
+
+        .auth-header {
+            margin-bottom: 2rem;
+        }
+
+        .auth-header h2 {
+            color: var(--text-white);
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 0.2rem;
+            letter-spacing: -0.02em;
+        }
+
+        .auth-header p {
+            color: var(--text-light);
+            font-size: 0.85rem;
+        }
+
+        .alert-error {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            padding: 0.8rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            color: var(--text-light);
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .input-wrapper i {
+            position: absolute;
+            color: #64748b;
+            font-size: 1.2rem;
+        }
+
+        .input-wrapper .left-icon {
+            left: 1rem;
+        }
+
+        .input-wrapper .right-icon {
+            right: 1rem;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .input-wrapper .right-icon:hover {
+            color: #1e293b;
+        }
+
+        .form-control {
+            width: 100%;
+            background-color: var(--input-bg);
+            border: 2px solid transparent;
+            border-radius: var(--border-radius);
+            padding: 0.8rem 1rem 0.8rem 2.8rem;
+            font-size: 0.95rem;
+            color: #1e293b;
+            font-weight: 500;
+            transition: all 0.2s;
+            outline: none;
+        }
+
+        .form-control:focus {
+            border-color: rgba(249, 115, 22, 0.5);
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.15);
+        }
+
+        .options-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+
+        .checkbox-wrapper input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        .checkbox-wrapper span {
+            color: var(--text-light);
+            font-size: 0.8rem;
+        }
+
+        .forgot-link {
+            color: var(--primary);
+            font-size: 0.8rem;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+
+        .forgot-link:hover {
+            color: var(--primary-hover);
+        }
+
+        .btn-submit {
+            width: 100%;
+            background: linear-gradient(to right, #f97316, #fb923c);
+            color: white;
+            border: none;
+            padding: 0.9rem;
+            border-radius: var(--border-radius);
+            font-size: 0.95rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-submit:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+        }
+
+        .btn-submit:active {
+            transform: translateY(0);
+        }
+
+        .footer-text {
+            margin-top: 2rem;
+            font-size: 0.75rem;
+            color: #9ca3af;
+            text-align: center;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Fallback Logo / Actual Logo -->
+    <div class="brand-logo">
+        <img src="assets/images/logo.png" alt="Hub Eurosoft" onerror="this.outerHTML='<h1 style=\'color:#1a1d2e; font-weight:900; font-size: 2.5rem; letter-spacing:-0.03em;\'><i class=\'bx bxs-graduation\' style=\'color:#f97316;\'></i> Hub<span style=\'color:#f97316;\'>Eurosoft</span></h1>'">
+    </div>
+
+    <!-- Login Card -->
+    <div class="auth-card">
+        <div class="auth-header">
+            <h2>Iniciar sesión</h2>
+            <p>Accede a tu cuenta corporativa</p>
+        </div>
+
+        <?php if ($error): ?>
+            <div class="alert-error">
+                <i class='bx bxs-error-circle'></i>
+                <?php echo htmlspecialchars($error); ?>
+            </div>
+        <?php endif; ?>
+
+        <form action="login.php" method="POST">
+            
+            <div class="form-group">
+                <label for="email" class="form-label">Correo Electrónico</label>
+                <div class="input-wrapper">
+                    <i class='bx bx-envelope left-icon'></i>
+                    <input type="email" id="email" name="email" class="form-control" placeholder="tu.nombre@empresa.com" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="password" class="form-label">Contraseña</label>
+                <div class="input-wrapper">
+                    <i class='bx bx-lock-alt left-icon'></i>
+                    <input type="password" id="password" name="password" class="form-control" placeholder="••••••••" required>
+                    <i class='bx bx-show right-icon' id="togglePassword" title="Mostrar contraseña"></i>
+                </div>
+            </div>
+
+            <div class="options-row">
+                <label class="checkbox-wrapper">
+                    <input type="checkbox" name="remember">
+                    <span>Recordarme</span>
+                </label>
+                <a href="#" class="forgot-link">¿Olvidaste tu contraseña?</a>
+            </div>
+
+            <button type="submit" class="btn-submit">
+                Iniciar Sesión <i class='bx bx-right-arrow-alt' style="font-size: 1.2rem;"></i>
+            </button>
+        </form>
+    </div>
+
+    <div class="footer-text">
+        &copy; <?= date("Y") ?> Hub Eurosoft. Todos los derechos reservados.
+    </div>
+
+    <script>
+        // Funcionalidad para mostrar/ocultar contraseña
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordField = document.getElementById('password');
+
+        togglePassword.addEventListener('click', function () {
+            const type = passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordField.setAttribute('type', type);
+            
+            // Toggle icon
+            this.classList.toggle('bx-show');
+            this.classList.toggle('bx-hide');
+            this.style.color = type === 'text' ? '#f97316' : '#64748b';
+        });
+    </script>
+</body>
+</html>
