@@ -53,10 +53,8 @@ $initials = mb_strtoupper($initials, 'UTF-8');
 ?>
 
 <nav class="v3-topnav">
-    <!-- Logo -->
-    <div class="v3-topnav-logo">
-        <div class="v3-topnav-logo-icon">HE</div>
-        <span class="v3-topnav-logo-text">Hub Eurosoft</span>
+    <div class="v3-topnav-logo" style="margin-left: -2rem;">
+        <img src="assets/images/logo.png" alt="Hub Eurosoft" style="height: 48px; width: auto; display: block;">
     </div>
 
     <!-- Navigation Pills -->
@@ -151,8 +149,7 @@ $initials = mb_strtoupper($initials, 'UTF-8');
     <div class="v3-mobile-menu-inner">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
             <div class="v3-topnav-logo">
-                <div class="v3-topnav-logo-icon">HE</div>
-                <span class="v3-topnav-logo-text">Hub Eurosoft</span>
+                <img src="assets/images/logo.png" alt="Hub Eurosoft" style="height: 48px; width: auto; display: block;">
             </div>
             <button onclick="toggleMobileMenu()" style="background: none; border: none; font-size: 1.5rem; color: #6b7280; cursor: pointer;">
                 <i class='bx bx-x'></i>
