@@ -1,30 +1,89 @@
-# Ignorar archivos locales y configuraciones de base de datos
+# ==========================================
+# CREDENCIALES - NUNCA subir a GitHub
+# ==========================================
 config/database.php
 config/database_local.php
 config/database_vps.php
-config/database_*.php
 
-# Ignorar archivos subidos por usuarios (imágenes de perfil, respuestas)
-uploads/
-assets/uploads/
-
-# Ignorar logs y caches
-.cache/
-logs/
-*.log
-
-# Ignorar archivos temporales, zips y scripts de pruebas que creamos
-*.zip
-*.tar.gz
-test_*.php
-db_export.php
-db_dump_to_file.php
+# ==========================================
+# SCRIPTS DE DIAGNÓSTICO Y DEBUG TEMPORAL
+# ==========================================
+diag*.php
 debug_*.php
 fix_*.php
 hotfix_*.php
 remote_fix*.php
-update_*.php
+check_triggers.php
+dump_triggers.php
+sql_test*.php
+db_dump*.php
+db_export*.php
+db_schema_lp.php
+force_*.php
+insert_ranking_ach.php
+test.php
+test_*.php
+remote_extract.php
+read_docx.php
+local_student_data.php
+database_vps.php
+update_ach_title.php
+test_ach_all.php
+test_achievements*.php
+setup.php
+deploy_forums_hostinger.php
+trigger_achievements.php
+cert.php
+api_grade_manual.php
 
-# Ignorar archivos del OS
+# ==========================================
+# ARCHIVOS TEMPORALES DE TRABAJO
+# ==========================================
+_*.txt
+_*.html
+*.cache
+.cache/
+_audit.txt
+_cookies.txt
+_deploy.txt
+_error_clean.txt
+_prod_debug.html
+_prod_debug2.html
+_prod_error.txt
+forums_specs.txt
+forums_specs.utf8.txt
+
+# ==========================================
+# COMPRIMIDOS
+# ==========================================
+*.zip
+*.tar.gz
+*.rar
+
+# ==========================================
+# UPLOADS (archivos de usuarios - no versionar)
+# ==========================================
+uploads/
+
+# ==========================================
+# ASSETS Y VISTAS CON ESTRUCTURA DUPLICADA (bug local)
+# ==========================================
+assets/css/css/
+assets/images/images/
+assets/images/medals/
+assets/js/js/
+views/views/
+includes/includes/
+
+# ==========================================
+# BACKUPS
+# ==========================================
+*.backup.php
+*.bak
+
+# ==========================================
+# SISTEMA OPERATIVO
+# ==========================================
 .DS_Store
 Thumbs.db
+desktop.ini

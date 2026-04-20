@@ -91,6 +91,44 @@ function getAbsoluteProgressPct($pdo, $type, $id) {
     return 0;
 }
 
+// === KPI: Tasa de Finalización ===
+function getFinalizationRate($pdo, $whereFilter, $metricFilter) {
+    $total     = (int)$pdo->query("SELECT COUNT(*) FROM CourseProgress WHERE userId IN (SELECT id FROM User WHERE ($whereFilter) AND ($metricFilter))")->fetchColumn();
+    $completed = (int)$pdo->query("SELECT COUNT(*) FROM CourseProgress WHERE userId IN (SELECT id FROM User WHERE ($whereFilter) AND ($metricFilter)) AND isCompleted = 1")->fetchColumn();
+    return ['pct' => $total > 0 ? round(($completed / $total) * 100, 1) : 0, 'done' => $completed, 'total' => $total];
+}
+
+// === KPI: Índice de Engagement ===
+function getEngagementStats($pdo, $whereFilter, $metricFilter) {
+    $active   = (int)$pdo->query("SELECT COUNT(*) FROM User WHERE ($whereFilter) AND ($metricFilter) AND lastLoginAt >= DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetchColumn();
+    $atRisk   = (int)$pdo->query("SELECT COUNT(*) FROM User WHERE ($whereFilter) AND ($metricFilter) AND lastLoginAt < DATE_SUB(NOW(), INTERVAL 7 DAY) AND lastLoginAt >= DATE_SUB(NOW(), INTERVAL 14 DAY)")->fetchColumn();
+    $inactive = (int)$pdo->query("SELECT COUNT(*) FROM User WHERE ($whereFilter) AND ($metricFilter) AND (lastLoginAt IS NULL OR lastLoginAt < DATE_SUB(NOW(), INTERVAL 14 DAY))")->fetchColumn();
+    return ['active' => $active, 'atRisk' => $atRisk, 'inactive' => $inactive];
+}
+
+// === KPI: Roles Críticos de Capacitación ===
+function getCriticalRolesData($pdo, $plainFilter, $aliasFilter) {
+    global $metricFilterUser, $metricFilterU;
+    $roles = ['Modelador', 'Auditor Líder', 'Administrador documental', 'Auditor Interno', 'Coordinador de Auditorias'];
+    $results = [];
+    foreach ($roles as $rName) {
+        $esc = str_replace("'", "\\'", $rName);
+        $cnt = (int)$pdo->query("
+            SELECT COUNT(DISTINCT u.id) FROM User u
+            JOIN _TrainingRoleToUser tru ON tru.B = u.id
+            JOIN TrainingRole tr ON tr.id = tru.A
+            WHERE tr.name = '$esc' AND ($aliasFilter) AND ($metricFilterU)
+        ")->fetchColumn();
+        if ($cnt === 0) continue;
+        $pct = getAbsoluteProgressPct($pdo, 'STUDENT_LIST',
+            "u.id IN (SELECT t2.B FROM _TrainingRoleToUser t2 JOIN TrainingRole r2 ON r2.id = t2.A WHERE r2.name = '$esc') AND ($aliasFilter) AND $metricFilterU"
+        );
+        $results[] = ['name' => $rName, 'users' => $cnt, 'pct' => (int)$pct,
+            'level' => $pct >= 70 ? 'green' : ($pct >= 40 ? 'yellow' : 'red')];
+    }
+    return $results;
+}
+
 $breadcrumbs = [];
 $entities = [];
 $showBUsGrid = false;
@@ -103,6 +141,10 @@ $entityLabel = "";
 $kpiLabel2 = "Usuarios Totales";
 $kpiLabel3 = "Cursos Completados";
 $kpiVal3 = null;
+$kpiFinalization  = ['pct' => 0, 'done' => 0, 'total' => 0];
+$engagementStats  = ['active' => 0, 'atRisk' => 0, 'inactive' => 0];
+$criticalRolesData = [];
+$showKpiExtras    = false;
 
 if ($qUserId) {
     // NIVEL 4: EXPEDIENTE ACADÉMICO INDIVIDUAL
@@ -189,7 +231,19 @@ if ($qUserId) {
         $kpiPassed = $res['pass'] ?: 0;
         $kpiLabel3 = "Avance de Filial";
         $kpiVal3 = $qBuId === 'global' ? getAbsoluteProgressPct($pdo, 'COMPANY', $qCompanyId, " AND businessUnitId IS NULL") . '%' : getAbsoluteProgressPct($pdo, 'BU', $qBuId) . '%';
-        
+
+        // === NUEVOS KPIs (Nivel BU) ===
+        $showKpiExtras = true;
+        $buPF = $qBuId === 'global'
+            ? "companyId = '$qCompanyId' AND businessUnitId IS NULL"
+            : "companyId = '$qCompanyId' AND businessUnitId = '$qBuId'";
+        $buAF = $qBuId === 'global'
+            ? "u.companyId = '$qCompanyId' AND u.businessUnitId IS NULL"
+            : "u.companyId = '$qCompanyId' AND u.businessUnitId = '$qBuId'";
+        $kpiFinalization   = getFinalizationRate($pdo, $buPF, $metricFilterUser);
+        $engagementStats   = getEngagementStats($pdo, $buPF, $metricFilterUser);
+        $criticalRolesData = getCriticalRolesData($pdo, $buPF, $buAF);
+
         $topTitle = "Top 3 Alumnos Destacados (" . htmlspecialchars($buName) . ")";
         $listTitle = "Matrícula Completa (" . htmlspecialchars($buName) . ")";
         
@@ -313,6 +367,11 @@ if ($qUserId) {
             $kpiLabel3 = "Avance Global";
             $kpiVal3 = getAbsoluteProgressPct($pdo, 'COMPANY_DIRECT', $qCompanyId) . '%';
         }
+        // === NUEVOS KPIs (Nivel Empresa) ===
+        $showKpiExtras     = true;
+        $kpiFinalization   = getFinalizationRate($pdo, "companyId = '$qCompanyId'", $metricFilterUser);
+        $engagementStats   = getEngagementStats($pdo, "companyId = '$qCompanyId'", $metricFilterUser);
+        $criticalRolesData = getCriticalRolesData($pdo, "companyId = '$qCompanyId'", "u.companyId = '$qCompanyId'");
     }
 } else {
     // NIVEL 1: PORTAL SUPERADMIN (COMPAÑÍAS)
@@ -411,7 +470,7 @@ if ($qUserId) {
                 <p class="kpi-label"><?= htmlspecialchars($entityLabel) ?></p>
                 <p class="kpi-val"><?= $kpiEntities > 0 ? number_format($kpiEntities) : "—" ?></p>
             </div>
-            <span style="font-size: 2rem;">🏢</span>
+            <i class='bx bx-buildings' style="font-size:2rem;color:#6366f1;opacity:0.8;"></i>
         </div>
         <?php endif; ?>
         <div class="kpi-card">
@@ -419,23 +478,90 @@ if ($qUserId) {
                 <p class="kpi-label"><?= $kpiLabel2 ?></p>
                 <p class="kpi-val"><?= $kpiLabel2 === 'Usuarios Totales' ? number_format($kpiUsers) : $kpiUsers ?></p>
             </div>
-            <span style="font-size: 2rem;">👥</span>
+            <i class='bx bx-group' style="font-size:2rem;color:#3b82f6;opacity:0.8;"></i>
         </div>
         <div class="kpi-card">
             <div>
                 <p class="kpi-label"><?= $kpiLabel3 ?></p>
                 <p class="kpi-val"><?= $kpiVal3 !== null ? $kpiVal3 : number_format($kpiCompleted) ?></p>
             </div>
-            <span style="font-size: 2rem;">📈</span>
+            <i class='bx bx-trending-up' style="font-size:2rem;color:#10b981;opacity:0.8;"></i>
         </div>
         <div class="kpi-card">
             <div>
                 <p class="kpi-label">Exámenes Aprobados</p>
                 <p class="kpi-val"><?= number_format($kpiPassed) ?></p>
             </div>
-            <span style="font-size: 2rem;">✅</span>
+            <i class='bx bxs-check-circle' style="font-size:2rem;color:#22c55e;opacity:0.8;"></i>
+        </div>
+        <?php if ($showKpiExtras && $kpiFinalization['total'] > 0): ?>
+        <div class="kpi-card">
+            <div>
+                <p class="kpi-label">Tasa Finalización</p>
+                <p class="kpi-val"><?= $kpiFinalization['pct'] ?>%</p>
+                <p style="font-size:0.68rem;color:#9ca3af;margin:0.15rem 0 0;"><?= $kpiFinalization['done'] ?>/<?= $kpiFinalization['total'] ?> cursos</p>
+            </div>
+            <i class='bx bxs-flag-checkered' style="font-size:2rem;color:#f97316;opacity:0.8;"></i>
+        </div>
+        <?php endif; ?>
+    </div>
+
+    <?php if ($showKpiExtras): ?>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem;">
+
+        <!-- Roles Críticos -->
+        <?php if (!empty($criticalRolesData)): ?>
+        <div style="background:white;border-radius:16px;border:1px solid #f1f5f9;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);padding:1.5rem;">
+            <h3 style="font-size:0.95rem;font-weight:800;color:#0f172a;margin:0 0 1.2rem;display:flex;align-items:center;gap:0.5rem;">
+                <i class='bx bxs-target-lock' style='color:#ef4444;font-size:1.1rem;'></i> Roles Críticos
+            </h3>
+            <div style="display:flex;flex-direction:column;gap:0.85rem;">
+            <?php foreach($criticalRolesData as $cr):
+                $crC = $cr['level']==='green' ? '#16a34a' : ($cr['level']==='yellow' ? '#d97706' : '#dc2626');
+            ?>
+                <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <div style="width:9px;height:9px;border-radius:50%;background:<?= $crC ?>;flex-shrink:0;"></div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.2rem;">
+                            <span style="font-size:0.78rem;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= htmlspecialchars($cr['name']) ?></span>
+                            <span style="font-size:0.78rem;font-weight:800;color:<?= $crC ?>;margin-left:0.5rem;flex-shrink:0;"><?= $cr['pct'] ?>%</span>
+                        </div>
+                        <div style="width:100%;background:#f1f5f9;border-radius:999px;height:5px;overflow:hidden;">
+                            <div style="height:100%;background:<?= $crC ?>;width:<?= max($cr['pct'],2) ?>%;transition:width 0.5s;"></div>
+                        </div>
+                        <div style="font-size:0.65rem;color:#94a3b8;margin-top:0.2rem;"><?= $cr['users'] ?> persona<?= $cr['users']!==1?'s':'' ?></div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+            </div>
+        </div>
+        <?php else: ?><div></div><?php endif; ?>
+
+        <!-- Índice de Engagement -->
+        <div style="background:white;border-radius:16px;border:1px solid #f1f5f9;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);padding:1.5rem;">
+            <h3 style="font-size:0.95rem;font-weight:800;color:#0f172a;margin:0 0 1.2rem;display:flex;align-items:center;gap:0.5rem;">
+                <i class='bx bxs-flame' style='color:#f59e0b;font-size:1.1rem;'></i> Actividad Reciente
+            </h3>
+            <div style="display:flex;flex-direction:column;gap:0.75rem;">
+                <div style="display:flex;align-items:center;gap:1rem;background:#f0fdf4;border-radius:10px;padding:0.65rem 1rem;">
+                    <div style="width:10px;height:10px;border-radius:50%;background:#16a34a;flex-shrink:0;"></div>
+                    <div style="flex:1;font-size:0.75rem;font-weight:600;color:#15803d;">Activos — últimos 7 días</div>
+                    <div style="font-size:1.5rem;font-weight:900;color:#16a34a;"><?= $engagementStats['active'] ?></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:1rem;background:#fffbeb;border-radius:10px;padding:0.65rem 1rem;">
+                    <div style="width:10px;height:10px;border-radius:50%;background:#d97706;flex-shrink:0;"></div>
+                    <div style="flex:1;font-size:0.75rem;font-weight:600;color:#b45309;">En riesgo — 7 a 14 días</div>
+                    <div style="font-size:1.5rem;font-weight:900;color:#d97706;"><?= $engagementStats['atRisk'] ?></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:1rem;background:#fef2f2;border-radius:10px;padding:0.65rem 1rem;">
+                    <div style="width:10px;height:10px;border-radius:50%;background:#dc2626;flex-shrink:0;"></div>
+                    <div style="flex:1;font-size:0.75rem;font-weight:600;color:#b91c1c;">Inactivos — más de 14 días</div>
+                    <div style="font-size:1.5rem;font-weight:900;color:#dc2626;"><?= $engagementStats['inactive'] ?></div>
+                </div>
+            </div>
         </div>
     </div>
+    <?php endif; ?>
     
     <!-- GRID DE ENTIDADES (Companies / BUs) -->
     <?php if ($showBUsGrid && !empty($entities)): ?>
@@ -464,8 +590,12 @@ if ($qUserId) {
                     <div class="sc-header">
                         <div class="sc-title-wrap" style="align-items: center;">
                             <?php if (!empty($e['logoPath'])): ?>
-                                <div style="width: 44px; height: 44px; border-radius: 8px; border: 1px solid #e5e7eb; overflow: hidden; flex-shrink: 0; background: white; padding: 2px;">
-                                    <img src="<?= htmlspecialchars(ltrim($e['logoPath'], '/')) ?>" alt="Logo" style="width:100%; height:100%; object-fit:contain;">
+                                <div style="width:44px;height:44px;border-radius:8px;border:1px solid #e5e7eb;overflow:hidden;flex-shrink:0;background:white;padding:2px;position:relative;">
+                                    <img src="<?= htmlspecialchars($e['logoPath']) ?>" alt="Logo" style="width:100%;height:100%;object-fit:contain;"
+                                         onerror="this.style.display='none';this.parentElement.querySelector('.logo-fallback').style.display='flex';">
+                                    <div class="logo-fallback" style="display:none;width:100%;height:100%;align-items:center;justify-content:center;position:absolute;top:0;left:0;">
+                                        <i class='bx bx-building-house' style="font-size:1.4rem;color:#9ca3af;"></i>
+                                    </div>
                                 </div>
                             <?php else: ?>
                                 <span class="sc-medal"><?= $medal ?></span>
@@ -526,7 +656,7 @@ if ($qUserId) {
                         <div class="sc-title-wrap">
                             <div style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid #e5e7eb; overflow: hidden; flex-shrink: 0; background: white; margin-right: 0.5rem; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #9ca3af;">
                                 <?php if (!empty($user['image'])): ?>
-                                    <img src="<?= htmlspecialchars(ltrim($user['image'], '/')) ?>" alt="Avatar" style="width:100%; height:100%; object-fit:cover;">
+                                    <img src="<?= htmlspecialchars($user['image']) ?>" alt="Avatar" style="width:100%; height:100%; object-fit:cover;">
                                 <?php else: ?>
                                     <i class='bx bxs-user'></i>
                                 <?php endif; ?>
@@ -654,9 +784,18 @@ if ($qUserId) {
                                                         <i class="bx <?= $isComp ? 'bx-check-double' : ($hasStarted ? 'bx-loader-circle bx-spin' : 'bx-minus-circle') ?>" style="color: <?= $isComp ? '#16a34a' : ($hasStarted ? '#3b82f6' : '#9ca3af') ?>; font-size: 1rem; vertical-align: middle;"></i>
                                                         <?= htmlspecialchars($c['name']) ?>
                                                     </div>
-                                                    <div style="color: #6b7280; text-align: center;"><i class='bx bx-book-open'></i> <b style="color:#1f2937;"><?= $hasStarted ? "$cL/$tL ($pct%)" : "0/0" ?></b></div>
-                                                    <div style="color: #6b7280; text-align: center;"><i class='bx bx-refresh'></i> <b style="color:#1f2937;"><?= $c['quizAttempts'] ?: 0 ?></b></div>
-                                                    <div style="color: #6b7280; text-align: right;"><i class='bx bx-notepad'></i> <b style="color:<?= $passed ? '#16a34a' : ($c['quizScore'] !== null ? '#b91c1c' : '#1f2937') ?>;"><?= $c['quizScore'] !== null ? $c['quizScore'] : '—' ?></b></div>
+                                                    <div style="color:#6b7280;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px;">
+                                                        <span><i class='bx bx-book-open'></i> <b style="color:#1f2937;"><?= $hasStarted ? "$cL/$tL ($pct%)" : "0/0" ?></b></span>
+                                                        <span style="font-size:0.6rem;color:#9ca3af;font-weight:700;letter-spacing:0.03em;">LECCIONES</span>
+                                                    </div>
+                                                    <div style="color:#6b7280;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px;">
+                                                        <span><i class='bx bx-revision'></i> <b style="color:#1f2937;"><?= $c['quizAttempts'] ?: 0 ?></b></span>
+                                                        <span style="font-size:0.6rem;color:#9ca3af;font-weight:700;letter-spacing:0.03em;">INTENTOS</span>
+                                                    </div>
+                                                    <div style="color:#6b7280;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:1px;">
+                                                        <span><i class='bx bx-notepad'></i> <b style="color:<?= $passed ? '#16a34a' : ($c['quizScore'] !== null ? '#b91c1c' : '#1f2937') ?>;"><?= $c['quizScore'] !== null ? $c['quizScore'] : '&mdash;' ?></b></span>
+                                                        <span style="font-size:0.6rem;color:#9ca3af;font-weight:700;letter-spacing:0.03em;">CALIFICACI&Oacute;N</span>
+                                                    </div>
                                                 </div>
                                             <?php endforeach; ?>
                                         </div>
