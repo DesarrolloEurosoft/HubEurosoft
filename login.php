@@ -141,14 +141,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         /* Top Logo Space */
         .brand-logo {
-            margin-bottom: 0.5rem;
+            margin-bottom: 1.5rem;
             text-align: center;
             display: flex;
             justify-content: center;
         }
         
         .brand-logo img {
-            max-height: 180px; /* Compensating for large canvas margins */
+            max-height: 64px;
             object-fit: contain;
         }
 
@@ -326,13 +326,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
 
+    <div style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:420px;">
     <!-- Fallback Logo / Actual Logo -->
-    <div class="brand-logo">
+    <div class="brand-logo" style="width:100%;">
         <img src="assets/images/logo.png" alt="Hub Eurosoft" onerror="this.outerHTML='<h1 style=\'color:#1a1d2e; font-weight:900; font-size: 2.5rem; letter-spacing:-0.03em;\'><i class=\'bx bxs-graduation\' style=\'color:#f97316;\'></i> Hub<span style=\'color:#f97316;\'>Eurosoft</span></h1>'">
     </div>
 
     <!-- Login Card -->
-    <div class="auth-card">
+    <div class="auth-card" style="margin-top:2rem;">
         <div class="auth-header">
             <h2>Iniciar sesión</h2>
             <p>Accede a tu cuenta corporativa</p>
@@ -377,6 +378,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </button>
         </form>
     </div>
+    </div><!-- /container -->
 
     <div class="footer-text">
         &copy; <?= date("Y") ?> Hub Eurosoft. Todos los derechos reservados.
