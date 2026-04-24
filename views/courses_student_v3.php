@@ -26,6 +26,91 @@ function getStatusCfg($status) {
 <div style="max-width:1920px;margin:0 auto;padding:1rem 1.5rem 2rem;">
     <h1 style="font-size:1.75rem;font-weight:700;color:#111827;margin:0 0 1.5rem 0;">Mis Cursos</h1>
 
+    <!-- Filters + Search -->
+    <div style="background:white;border-radius:1rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;margin-bottom:1.5rem;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+            <div style="display:flex;align-items:center;gap:8px;background:#f3f4f6;border-radius:999px;padding:8px;" id="v3FilterContainer">
+                <button class="v3-filter active" data-filter="all" onclick="v3Filter(this)">Todos (<?= $totalCourses ?>)</button>
+                <button class="v3-filter" data-filter="in-progress" onclick="v3Filter(this)">En Progreso (<?= $inProgressCourses ?>)</button>
+                <button class="v3-filter" data-filter="locked" onclick="v3Filter(this)">Bloqueados (<?= count(array_filter($allCoursesFlat, fn($c)=>$c['status']==='locked')) ?>)</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:280px;max-width:28rem;">
+                <div style="position:relative;flex:1;">
+                    <i class='bx bx-search' style="position:absolute;left:16px;top:50%;transform:translateY(-50%);color:#9ca3af;"></i>
+                    <input type="text" id="v3SearchInput" placeholder="Buscar cursos..." oninput="v3ApplyFilters()" style="width:100%;padding:10px 16px 10px 44px;background:#f9fafb;border-radius:999px;border:1px solid #e5e7eb;color:#111827;font-size:0.875rem;outline:none;" onfocus="this.style.boxShadow='0 0 0 2px #FF6A00';this.style.borderColor='#FF6A00'" onblur="this.style.boxShadow='none';this.style.borderColor='#e5e7eb'">
+                </div>
+                <div style="display:flex;align-items:center;gap:4px;background:#f3f4f6;border-radius:999px;padding:4px;">
+                    <button id="v3BtnGrid" onclick="v3SetView('grid')" style="padding:8px;border-radius:50%;border:none;cursor:pointer;background:#FF6A00;color:white;box-shadow:0 1px 3px rgba(0,0,0,0.1);display:flex;align-items:center;justify-content:center;"><i class='bx bx-grid-alt'></i></button>
+                    <button id="v3BtnList" onclick="v3SetView('list')" style="padding:8px;border-radius:50%;border:none;cursor:pointer;background:transparent;color:#6b7280;display:flex;align-items:center;justify-content:center;"><i class='bx bx-list-ul'></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Course Grid -->
+    <div id="v3CourseContainer" style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem;margin-bottom:1.5rem;">
+    <?php foreach ($allCoursesFlat as $idx => $c):
+        $isLocked = $c['status'] === 'locked';
+        $badge = getStatusCfg($c['status']);
+        $imgUrl = resolveImgUrl($c['imageUrl'] ?? '');
+        $clickUrl = $isLocked ? '#' : ($c['status'] === 'quiz-pending' ? 'index.php?view=take_quiz&course_id='.urlencode($c['id']) : 'index.php?view=lesson&course_id='.urlencode($c['id']));
+        $btnLabel = $c['status']==='completed' ? 'Revisar' : ($isLocked ? 'Bloqueado' : ($c['status']==='quiz-pending' ? 'Presentar Examen' : 'Continuar'));
+        $btnIcon = $c['status']==='completed' ? 'bx-check-circle' : ($isLocked ? 'bx-lock' : 'bx-play-circle');
+    ?>
+    <div class="v3-course" data-title="<?= strtolower(htmlspecialchars($c['title'])) ?>" data-status="<?= $c['status'] ?>"
+         style="background:white;border-radius:1rem;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;transition:all 0.3s;<?= $isLocked ? 'opacity:0.6;' : 'cursor:pointer;' ?>"
+         <?= !$isLocked ? "onmouseover=\"this.style.boxShadow='0 20px 25px -5px rgba(0,0,0,0.1)';this.style.transform='translateY(-4px)'\" onmouseout=\"this.style.boxShadow='0 1px 2px rgba(0,0,0,0.05)';this.style.transform='translateY(0)'\"" : '' ?>
+         <?= !$isLocked ? "onclick=\"window.location.href='$clickUrl'\"" : '' ?>>
+        <div style="position:relative;height:192px;overflow:hidden;">
+            <?php if ($imgUrl): ?>
+                <img src="<?= htmlspecialchars($imgUrl) ?>" alt="" style="width:100%;height:100%;object-fit:cover;transition:transform 0.5s;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+                <div style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;background:linear-gradient(135deg,#fff7ed,#fefce8);"><i class='bx bx-book-open' style="font-size:2.5rem;color:rgba(255,106,0,0.3);"></i></div>
+            <?php else: ?>
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#fff7ed,#fefce8);"><i class='bx bx-book-open' style="font-size:2.5rem;color:rgba(255,106,0,0.3);"></i></div>
+            <?php endif; ?>
+            <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.6),transparent);"></div>
+            <?php if ($isLocked): ?><div style="position:absolute;inset:0;background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><i class='bx bx-lock' style="font-size:1.5rem;color:rgba(255,255,255,0.7);"></i></div><?php endif; ?>
+            <div style="position:absolute;top:16px;left:16px;background:<?= $badge['bg'] ?>;border:1px solid <?= $badge['border'] ?>;padding:6px 12px;border-radius:8px;backdrop-filter:blur(4px);display:flex;align-items:center;gap:6px;">
+                <i class='bx <?= $badge['icon'] ?>' style="font-size:0.875rem;color:<?= $badge['text'] ?>;"></i>
+                <span style="font-size:0.75rem;font-weight:600;color:<?= $badge['text'] ?>;"><?= $badge['label'] ?></span>
+            </div>
+            <?php if (!empty($c['description'])): ?>
+            <div style="position:absolute;bottom:16px;left:16px;"><span style="font-size:0.75rem;color:rgba(255,255,255,0.9);background:rgba(255,255,255,0.2);backdrop-filter:blur(4px);padding:4px 12px;border-radius:999px;"><?= htmlspecialchars(mb_strimwidth($c['description'],0,30,'…')) ?></span></div>
+            <?php endif; ?>
+        </div>
+        <div style="padding:1.25rem;">
+            <h3 style="font-size:1.125rem;font-weight:700;color:#111827;margin:0 0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= htmlspecialchars($c['title']) ?></h3>
+            <div style="display:flex;align-items:center;gap:1rem;font-size:0.875rem;color:#6b7280;margin-bottom:1rem;">
+                <span style="display:flex;align-items:center;gap:6px;"><i class='bx bx-book-open'></i> <?= $c['lessonsCount'] ?> lecciones</span>
+                <span style="display:flex;align-items:center;gap:6px;"><i class='bx bx-time-five'></i> <?= $c['duration'] ?></span>
+            </div>
+            <div style="margin-bottom:1rem;">
+                <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:#4b5563;margin-bottom:8px;">
+                    <span>Progreso</span>
+                    <span style="font-weight:700;color:#FF6A00;"><?= $c['progressPercent'] ?>%</span>
+                </div>
+                <div style="height:8px;background:#f3f4f6;border-radius:999px;overflow:hidden;">
+                    <div style="height:100%;width:<?= $c['progressPercent'] ?>%;background:linear-gradient(to right,#FF6A00,#FFA500);border-radius:999px;"></div>
+                </div>
+            </div>
+            <a href="<?= $clickUrl ?>" onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;border-radius:12px;font-weight:600;font-size:0.875rem;text-decoration:none;transition:all 0.3s;
+                <?= $isLocked ? 'background:#f3f4f6;color:#9ca3af;pointer-events:none;' : 'background:linear-gradient(to right,#FF6A00,#FFA500);color:white;' ?>"
+                <?= !$isLocked ? "onmouseover=\"this.style.boxShadow='0 10px 15px rgba(255,106,0,0.3)'\" onmouseout=\"this.style.boxShadow='none'\"" : '' ?>>
+                <i class='bx <?= $btnIcon ?>'></i> <?= $btnLabel ?>
+            </a>
+        </div>
+    </div>
+    <?php endforeach; ?>
+    </div>
+
+    <?php if (empty($allCoursesFlat)): ?>
+    <div style="background:white;border-radius:1rem;padding:3rem;border:1px solid #f3f4f6;text-align:center;margin-bottom:1.5rem;">
+        <i class='bx bx-book-open' style="font-size:2.5rem;color:#d1d5db;display:block;margin-bottom:1rem;"></i>
+        <p style="font-size:0.875rem;font-weight:600;color:#6b7280;">No hay cursos disponibles</p>
+        <p style="font-size:0.75rem;color:#9ca3af;margin:4px 0 0;">Contacta a soporte.</p>
+    </div>
+    <?php endif; ?>
+
     <!-- Hero: 2 Column Grid -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.5rem;">
 
@@ -105,90 +190,6 @@ function getStatusCfg($status) {
         </div>
     </div>
 
-    <!-- Filters + Search -->
-    <div style="background:white;border-radius:1rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;margin-bottom:1.5rem;">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
-            <div style="display:flex;align-items:center;gap:8px;background:#f3f4f6;border-radius:999px;padding:8px;" id="v3FilterContainer">
-                <button class="v3-filter active" data-filter="all" onclick="v3Filter(this)">Todos (<?= $totalCourses ?>)</button>
-                <button class="v3-filter" data-filter="in-progress" onclick="v3Filter(this)">En Progreso (<?= $inProgressCourses ?>)</button>
-                <button class="v3-filter" data-filter="locked" onclick="v3Filter(this)">Bloqueados (<?= count(array_filter($allCoursesFlat, fn($c)=>$c['status']==='locked')) ?>)</button>
-            </div>
-            <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:280px;max-width:28rem;">
-                <div style="position:relative;flex:1;">
-                    <i class='bx bx-search' style="position:absolute;left:16px;top:50%;transform:translateY(-50%);color:#9ca3af;"></i>
-                    <input type="text" id="v3SearchInput" placeholder="Buscar cursos..." oninput="v3ApplyFilters()" style="width:100%;padding:10px 16px 10px 44px;background:#f9fafb;border-radius:999px;border:1px solid #e5e7eb;color:#111827;font-size:0.875rem;outline:none;" onfocus="this.style.boxShadow='0 0 0 2px #FF6A00';this.style.borderColor='#FF6A00'" onblur="this.style.boxShadow='none';this.style.borderColor='#e5e7eb'">
-                </div>
-                <div style="display:flex;align-items:center;gap:4px;background:#f3f4f6;border-radius:999px;padding:4px;">
-                    <button id="v3BtnGrid" onclick="v3SetView('grid')" style="padding:8px;border-radius:50%;border:none;cursor:pointer;background:#FF6A00;color:white;box-shadow:0 1px 3px rgba(0,0,0,0.1);display:flex;align-items:center;justify-content:center;"><i class='bx bx-grid-alt'></i></button>
-                    <button id="v3BtnList" onclick="v3SetView('list')" style="padding:8px;border-radius:50%;border:none;cursor:pointer;background:transparent;color:#6b7280;display:flex;align-items:center;justify-content:center;"><i class='bx bx-list-ul'></i></button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Course Grid -->
-    <div id="v3CourseContainer" style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem;">
-    <?php foreach ($allCoursesFlat as $idx => $c):
-        $isLocked = $c['status'] === 'locked';
-        $badge = getStatusCfg($c['status']);
-        $imgUrl = resolveImgUrl($c['imageUrl'] ?? '');
-        $clickUrl = $isLocked ? '#' : ($c['status'] === 'quiz-pending' ? 'index.php?view=take_quiz&course_id='.urlencode($c['id']) : 'index.php?view=lesson&course_id='.urlencode($c['id']));
-        $btnLabel = $c['status']==='completed' ? 'Revisar' : ($isLocked ? 'Bloqueado' : ($c['status']==='quiz-pending' ? 'Presentar Examen' : 'Continuar'));
-        $btnIcon = $c['status']==='completed' ? 'bx-check-circle' : ($isLocked ? 'bx-lock' : 'bx-play-circle');
-    ?>
-    <div class="v3-course" data-title="<?= strtolower(htmlspecialchars($c['title'])) ?>" data-status="<?= $c['status'] ?>"
-         style="background:white;border-radius:1rem;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;transition:all 0.3s;<?= $isLocked ? 'opacity:0.6;' : 'cursor:pointer;' ?>"
-         <?= !$isLocked ? "onmouseover=\"this.style.boxShadow='0 20px 25px -5px rgba(0,0,0,0.1)';this.style.transform='translateY(-4px)'\" onmouseout=\"this.style.boxShadow='0 1px 2px rgba(0,0,0,0.05)';this.style.transform='translateY(0)'\"" : '' ?>
-         <?= !$isLocked ? "onclick=\"window.location.href='$clickUrl'\"" : '' ?>>
-        <div style="position:relative;height:192px;overflow:hidden;">
-            <?php if ($imgUrl): ?>
-                <img src="<?= htmlspecialchars($imgUrl) ?>" alt="" style="width:100%;height:100%;object-fit:cover;transition:transform 0.5s;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-                <div style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;background:linear-gradient(135deg,#fff7ed,#fefce8);"><i class='bx bx-book-open' style="font-size:2.5rem;color:rgba(255,106,0,0.3);"></i></div>
-            <?php else: ?>
-                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#fff7ed,#fefce8);"><i class='bx bx-book-open' style="font-size:2.5rem;color:rgba(255,106,0,0.3);"></i></div>
-            <?php endif; ?>
-            <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.6),transparent);"></div>
-            <?php if ($isLocked): ?><div style="position:absolute;inset:0;background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><i class='bx bx-lock' style="font-size:1.5rem;color:rgba(255,255,255,0.7);"></i></div><?php endif; ?>
-            <div style="position:absolute;top:16px;left:16px;background:<?= $badge['bg'] ?>;border:1px solid <?= $badge['border'] ?>;padding:6px 12px;border-radius:8px;backdrop-filter:blur(4px);display:flex;align-items:center;gap:6px;">
-                <i class='bx <?= $badge['icon'] ?>' style="font-size:0.875rem;color:<?= $badge['text'] ?>;"></i>
-                <span style="font-size:0.75rem;font-weight:600;color:<?= $badge['text'] ?>;"><?= $badge['label'] ?></span>
-            </div>
-            <?php if (!empty($c['description'])): ?>
-            <div style="position:absolute;bottom:16px;left:16px;"><span style="font-size:0.75rem;color:rgba(255,255,255,0.9);background:rgba(255,255,255,0.2);backdrop-filter:blur(4px);padding:4px 12px;border-radius:999px;"><?= htmlspecialchars(mb_strimwidth($c['description'],0,30,'…')) ?></span></div>
-            <?php endif; ?>
-        </div>
-        <div style="padding:1.25rem;">
-            <h3 style="font-size:1.125rem;font-weight:700;color:#111827;margin:0 0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= htmlspecialchars($c['title']) ?></h3>
-            <div style="display:flex;align-items:center;gap:1rem;font-size:0.875rem;color:#6b7280;margin-bottom:1rem;">
-                <span style="display:flex;align-items:center;gap:6px;"><i class='bx bx-book-open'></i> <?= $c['lessonsCount'] ?> lecciones</span>
-                <span style="display:flex;align-items:center;gap:6px;"><i class='bx bx-time-five'></i> <?= $c['duration'] ?></span>
-            </div>
-            <div style="margin-bottom:1rem;">
-                <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:#4b5563;margin-bottom:8px;">
-                    <span>Progreso</span>
-                    <span style="font-weight:700;color:#FF6A00;"><?= $c['progressPercent'] ?>%</span>
-                </div>
-                <div style="height:8px;background:#f3f4f6;border-radius:999px;overflow:hidden;">
-                    <div style="height:100%;width:<?= $c['progressPercent'] ?>%;background:linear-gradient(to right,#FF6A00,#FFA500);border-radius:999px;"></div>
-                </div>
-            </div>
-            <a href="<?= $clickUrl ?>" onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;border-radius:12px;font-weight:600;font-size:0.875rem;text-decoration:none;transition:all 0.3s;
-                <?= $isLocked ? 'background:#f3f4f6;color:#9ca3af;pointer-events:none;' : 'background:linear-gradient(to right,#FF6A00,#FFA500);color:white;' ?>"
-                <?= !$isLocked ? "onmouseover=\"this.style.boxShadow='0 10px 15px rgba(255,106,0,0.3)'\" onmouseout=\"this.style.boxShadow='none'\"" : '' ?>>
-                <i class='bx <?= $btnIcon ?>'></i> <?= $btnLabel ?>
-            </a>
-        </div>
-    </div>
-    <?php endforeach; ?>
-    </div>
-
-    <?php if (empty($allCoursesFlat)): ?>
-    <div style="background:white;border-radius:1rem;padding:3rem;border:1px solid #f3f4f6;text-align:center;">
-        <i class='bx bx-book-open' style="font-size:2.5rem;color:#d1d5db;display:block;margin-bottom:1rem;"></i>
-        <p style="font-size:0.875rem;font-weight:600;color:#6b7280;">No hay cursos disponibles</p>
-        <p style="font-size:0.75rem;color:#9ca3af;margin:4px 0 0;">Contacta a soporte.</p>
-    </div>
-    <?php endif; ?>
 </div>
 
 <style>
