@@ -91,7 +91,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             evaluateUserAchievements($pdo, $user['id']);
             // ------------------------------------------------------
 
-            header('Location: index.php');
+            // Redirigir según TrainingRole
+            $stmtRole = $pdo->prepare("
+                SELECT tr.name FROM TrainingRole tr
+                JOIN _TrainingRoleToUser rtu ON rtu.A = tr.id
+                WHERE rtu.B = ?
+                LIMIT 1
+            ");
+            $stmtRole->execute([$user['id']]);
+            $trainingRoleName = strtoupper(trim($stmtRole->fetchColumn() ?: ''));
+
+            if ($trainingRoleName === 'LECTOR OPERATIVO') {
+                header('Location: index.php?view=courses');
+            } else {
+                header('Location: index.php');
+            }
             exit;
             } // Cerramos la verificación de companyActive
         } else {
