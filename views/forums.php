@@ -3,7 +3,7 @@ if (!defined('DB_HOST') && !isset($pdo)) { die('Direct access not permitted'); }
 
 $userRole = strtoupper($_SESSION['user_role'] ?? 'STUDENT');
 $userId = $_SESSION['user_id'] ?? '';
-$isAdmin = ($userRole === 'ADMIN');
+$isAdmin = in_array($userRole, ['ADMIN', 'ROOT_ADMIN', 'SUPERVISOR']);
 $isCoLeader = ($userRole === 'COMPANY_LEADER');
 $isBuLeader = ($userRole === 'BUSINESS_UNIT_LEADER');
 
@@ -13,6 +13,24 @@ $myBuId = $_SESSION['user_bu'] ?? null;
 // Helper
 if (!function_exists('generateCuid')) {
     function generateCuid() { return 'c' . uniqid() . bin2hex(random_bytes(2)); }
+}
+
+// =========================================
+// HANDLER: Crear tema inline (Lector Operativo)
+// =========================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'lo_create_topic' && $userId) {
+    $loForumId  = trim($_POST['lo_forum_id'] ?? '');
+    $threadType = trim($_POST['threadType']  ?? 'QUESTION');
+    $title      = trim($_POST['title']       ?? '');
+    $content    = trim($_POST['content']     ?? '');
+
+    if ($loForumId && $title && $content) {
+        $newId = generateCuid();
+        $pdo->prepare("INSERT INTO ForumTopic (id, forumId, authorId, title, content, views, threadType, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, 0, ?, NOW(), NOW())")
+            ->execute([$newId, $loForumId, $userId, $title, $content, $threadType]);
+        echo "<script>window.location.href='index.php?view=forum_topic&forum_id=".urlencode($loForumId)."&topic_id=".urlencode($newId)."';</script>";
+        exit;
+    }
 }
 
 $step = $_GET['step'] ?? null;
@@ -25,12 +43,18 @@ $viewBuId = $_GET['filter_bu'] ?? null;
 if ($isAdmin) {
     if (!$step) $step = 'companies';
 } elseif ($isCoLeader) {
-    $viewCompanyId = $myCompanyId; // Un Leader no puede navegar a otras compañias
+    $viewCompanyId = $myCompanyId; // Siempre forzado a su empresa
+    // Validar que el filter_bu del GET pertenezca a su empresa
+    if ($viewBuId && $viewBuId !== 'corporativo') {
+        $stmtBuOwn = $pdo->prepare("SELECT id FROM BusinessUnit WHERE id = ? AND companyId = ?");
+        $stmtBuOwn->execute([$viewBuId, $myCompanyId]);
+        if (!$stmtBuOwn->fetch()) $viewBuId = null; // BU ajena -> reset
+    }
     if (!$step) $step = 'bus';
 } else {
     // BUSINESS_UNIT_LEADER, STUDENT, INSTRUCTOR...
     $viewCompanyId = $myCompanyId;
-    $viewBuId = $myBuId;
+    $viewBuId = $myBuId; // Forzado a su propia BU, no puede cambiarla
     if (!$step) $step = 'forums';
 }
 
@@ -40,30 +64,31 @@ if (!$viewCompanyId && !$isAdmin && !$myCompanyId) {
     return;
 }
 ?>
-<div style="width: 85%; max-width: 1920px; margin: 0 auto; padding: 1rem 0;">
+<div style="width: 100%; padding: 1rem 0;">
 <?php
 // =========================================
 // STEP 1: COMPAÑÍAS (Sólo Admin)
 // =========================================
 if ($step === 'companies' && $isAdmin): 
     $today = date('Y-m-d');
-    $stmtC = $pdo->query("SELECT c.id, c.name, c.logoPath, 
+    $stmtC = $pdo->prepare("SELECT c.id, c.name, c.logoPath,
         (SELECT COUNT(id) FROM BusinessUnit WHERE companyId = c.id) as totalBUs,
         (SELECT COUNT(id) FROM Forum WHERE companyId = c.id) as totalForums,
         (SELECT COUNT(t.id) FROM ForumTopic t JOIN Forum f ON t.forumId = f.id WHERE f.companyId = c.id) as totalTopics,
         (SELECT COUNT(r.id) FROM ForumReply r JOIN ForumTopic t ON r.topicId = t.id JOIN Forum f ON t.forumId = f.id WHERE f.companyId = c.id) as totalReplies,
         (
-            SELECT COUNT(DISTINCT u.id) 
-            FROM User u 
-            WHERE u.companyId = c.id 
+            SELECT COUNT(DISTINCT u.id)
+            FROM User u
+            WHERE u.companyId = c.id
             AND (
-                EXISTS (SELECT 1 FROM ForumTopic t JOIN Forum f ON t.forumId = f.id WHERE f.companyId = c.id AND t.authorId = u.id AND DATE(t.createdAt) = '$today')
-                OR 
-                EXISTS (SELECT 1 FROM ForumReply r JOIN ForumTopic t ON r.topicId = t.id JOIN Forum f ON t.forumId = f.id WHERE f.companyId = c.id AND r.authorId = u.id AND DATE(r.createdAt) = '$today')
+                EXISTS (SELECT 1 FROM ForumTopic t JOIN Forum f ON t.forumId = f.id WHERE f.companyId = c.id AND t.authorId = u.id AND DATE(t.createdAt) = ?)
+                OR
+                EXISTS (SELECT 1 FROM ForumReply r JOIN ForumTopic t ON r.topicId = t.id JOIN Forum f ON t.forumId = f.id WHERE f.companyId = c.id AND r.authorId = u.id AND DATE(r.createdAt) = ?)
             )
         ) as activeUsersToday
-        FROM Company c 
+        FROM Company c
         ORDER BY c.name ASC");
+    $stmtC->execute([$today, $today]);
     $companies = $stmtC->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
@@ -177,27 +202,46 @@ elseif ($step === 'forums'):
         $myTrainingRoles = $stmtTR->fetchAll(PDO::FETCH_COLUMN);
     }
 
-    // Auto-Provisionamiento
+    // Auto-Provisionamiento (INSERT IGNORE previene duplicados)
     if ($viewCompanyId) {
         $whereSql = "companyId = :co AND ";
         $paramsProv = [':co' => $viewCompanyId];
-        if ($viewBuId) { $whereSql .= "businessUnitId = :bu"; $paramsProv[':bu'] = $viewBuId;} else { $whereSql .= "businessUnitId IS NULL"; }
+        if ($viewBuId && $viewBuId !== 'corporativo') {
+            $whereSql .= "businessUnitId = :bu";
+            $paramsProv[':bu'] = $viewBuId;
+        } else {
+            $whereSql .= "businessUnitId IS NULL";
+            $viewBuId = null; // Normalizar
+        }
 
         $stmtGen = $pdo->prepare("SELECT id FROM Forum WHERE $whereSql AND targetRole = 'GENERAL'");
         $stmtGen->execute($paramsProv);
-        
+
         if (!$stmtGen->fetch()) {
             $fId = generateCuid();
-            $pdo->prepare("INSERT INTO Forum (id, companyId, businessUnitId, targetRole, title, description, createdAt, updatedAt) VALUES (?, ?, ?, 'GENERAL', 'Foro General', 'Espacio abierto para debatir, compartir ideas y anuncios.', NOW(), NOW())")
+            $pdo->prepare("INSERT IGNORE INTO Forum (id, companyId, businessUnitId, targetRole, title, description, createdAt, updatedAt) VALUES (?, ?, ?, 'GENERAL', 'Foro General', 'Espacio abierto para debatir, compartir ideas y anuncios.', NOW(), NOW())")
                 ->execute([$fId, $viewCompanyId, $viewBuId]);
-            
+
             $stmtRoles = $pdo->query("SELECT id, name FROM TrainingRole WHERE name != 'Gestor de Aprendizaje'");
             while($tr = $stmtRoles->fetch()) {
-                $fId = generateCuid();
+                $trFId = generateCuid();
                 $title = "Foro de " . $tr['name'];
-                $desc = "Espacio privado para perfiles formativos: " . $tr['name'];
-                $pdo->prepare("INSERT INTO Forum (id, companyId, businessUnitId, targetRole, title, description, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())")
-                    ->execute([$fId, $viewCompanyId, $viewBuId, $tr['id'], $title, $desc]);
+                $desc  = "Espacio privado para perfiles formativos: " . $tr['name'];
+                $pdo->prepare("INSERT IGNORE INTO Forum (id, companyId, businessUnitId, targetRole, title, description, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())")
+                    ->execute([$trFId, $viewCompanyId, $viewBuId, $tr['id'], $title, $desc]);
+            }
+        }
+
+        // Si el usuario tiene una BU real, asegurar que el foro Corporativo (empresa completa) exista.
+        // Esto permite mostrar el panel Corporativo a todos los usuarios con BU sin depender
+        // de que un Admin haya navegado al nivel Corporativo previamente.
+        if ($viewBuId) {
+            $stmtGenCorp = $pdo->prepare("SELECT id FROM Forum WHERE companyId = ? AND businessUnitId IS NULL AND targetRole = 'GENERAL'");
+            $stmtGenCorp->execute([$viewCompanyId]);
+            if (!$stmtGenCorp->fetch()) {
+                $corpId = generateCuid();
+                $pdo->prepare("INSERT IGNORE INTO Forum (id, companyId, businessUnitId, targetRole, title, description, createdAt, updatedAt) VALUES (?, ?, NULL, 'GENERAL', 'Foro General Corporativo', 'Espacio de comunicación abierto a toda la empresa.', NOW(), NOW())")
+                    ->execute([$corpId, $viewCompanyId]);
             }
         }
     }
@@ -218,14 +262,21 @@ elseif ($step === 'forums'):
         }
 
         $isLeaderAdmin = ($isAdmin || $isCoLeader || $isBuLeader);
-        
+
         if (!$isLeaderAdmin) {
-            // Un estudiante común solo ve GENERAL y SUS propios roles formativos
+            // Obtener el ID del TrainingRole de Lector Operativo (siempre visible para todos)
+            $stmtLORole = $pdo->prepare("SELECT id FROM TrainingRole WHERE LOWER(name) LIKE '%lector%operativo%' LIMIT 1");
+            $stmtLORole->execute();
+            $loRoleId = $stmtLORole->fetchColumn();
+
             if (count($myTrainingRoles) > 0) {
                 $inSet = implode(',', array_map(function($id) use ($pdo) { return $pdo->quote($id); }, $myTrainingRoles));
-                $wForm .= " AND targetRole IN ('GENERAL', $inSet)";
+                // Incluir GENERAL + sus propios roles + el Foro de Lector Operativo (visible para todos)
+                $loExtra = $loRoleId ? ", " . $pdo->quote($loRoleId) : '';
+                $wForm .= " AND targetRole IN ('GENERAL', $inSet$loExtra)";
             } else {
-                $wForm .= " AND targetRole = 'GENERAL'";
+                $loExtra = $loRoleId ? " OR targetRole = " . $pdo->quote($loRoleId) : '';
+                $wForm .= " AND (targetRole = 'GENERAL'$loExtra)";
             }
         }
         // Si ES Leader o Admin, $wForm tal cual (saca TODOS los foros de esa BU)
@@ -294,50 +345,489 @@ elseif ($step === 'forums'):
             }
         }
     }
+    // Detectar si el usuario es LECTOR OPERATIVO (antes de abrir el <main>)
+    $isLectorOp = false;
+    if (!$isAdmin && !$isCoLeader && !$isBuLeader && $userId) {
+        $stmtLO = $pdo->prepare("
+            SELECT tr.name FROM TrainingRole tr
+            JOIN _TrainingRoleToUser rtu ON rtu.A = tr.id
+            WHERE rtu.B = ? AND LOWER(tr.name) LIKE '%lector%operativo%'
+            LIMIT 1
+        ");
+        $stmtLO->execute([$userId]);
+        $isLectorOp = (bool)$stmtLO->fetchColumn();
+    }
     ?>
+    <?php if ($isLectorOp): ?>
     <main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: hidden; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 2rem;">
-        <div style="padding: 1.5rem 1.5rem 0 1.5rem; background: #f8fafc;">
-            <h2 style="font-size: 1.5rem; font-weight: 800; color: #1e293b; margin: 0 0 0.5rem 0;">Foros <?= htmlspecialchars($displayBuName) ?></h2>
-            <p style="color: #64748b; margin: 0;">Explora y participa en las áreas de discusión de tu comunidad.</p>
-        </div>
 
-    <?php if (count($forums) === 0): ?>
-            <div style="text-align: center; padding: 4rem; color: #9ca3af; background: white; border-top: 1px solid #e2e8f0;">
-                <i class='bx bx-message-alt-x' style="font-size: 3rem; margin-bottom: 1rem;"></i>
-                <h3>Sin Foros Disponibles</h3>
-                <p>Aún no se han generado canales de discusión para este segmento.</p>
+    <!-- HEADER — Foro Lector Operativo -->
+    <div style="background: linear-gradient(135deg, #fff7f0 0%, #fff 100%); border-bottom: 1px solid #ffe4cc; padding: 1.25rem 1.5rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.75rem;">
+        <div style="display:flex; align-items:center; gap:0.75rem;">
+            <div style="width:40px;height:40px;border-radius:10px;background:#FF6A00;display:flex;align-items:center;justify-content:center;color:white;font-size:1.2rem;flex-shrink:0;">
+                <i class='bx bx-chat'></i>
             </div>
-    <?php else: ?>
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; padding: 0 1.5rem 1.5rem 1.5rem; background: #f8fafc;">
-            <?php foreach ($forums as $forum): ?>
-                <a href="index.php?view=forum_topic&forum_id=<?= urlencode($forum['id']) ?>" style="display: block; text-decoration: none; color: inherit;">
-                    <div class="card" style="height: 100%; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer;" onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 10px 15px -3px rgba(0,0,0,0.1)';" onmouseout="this.style.transform='none'; this.style.boxShadow='var(--shadow)';">
-                        
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.8rem;">
-                            <div style="background: <?= $forum['targetRole']==='GENERAL' ? '#e0f2fe' : '#fce7f3' ?>; color: <?= $forum['targetRole']==='GENERAL' ? '#0369a1' : '#be185d' ?>; padding: 0.25rem 0.6rem; border-radius: 20px; font-size: 0.65rem; font-weight: 800; text-transform: uppercase;">
-                                <?= htmlspecialchars($forum['trName'] ?: $forum['targetRole']) ?>
-                            </div>
-                        </div>
-                        
-                        <h3 style="font-size: 1.1rem; color: #1e293b; margin-bottom: 0.5rem; font-weight: 800;"><?= htmlspecialchars($forum['title']) ?></h3>
-                        <p style="font-size: 0.85rem; color: #64748b; line-height: 1.4; margin-bottom: 1.5rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
-                            <?= htmlspecialchars($forum['description']) ?>
-                        </p>
-                        
-                        <div style="margin-top: auto; display: flex; gap: 1rem; border-top: 1px solid #f1f5f9; padding-top: 0.8rem;">
-                            <div style="display: flex; align-items: center; gap: 0.3rem; color: #64748b; font-size: 0.8rem; font-weight: 600;">
-                                <i class='bx bx-list-ul'></i> <?= (int)$forum['totalTopics'] ?> Hilos
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 0.3rem; color: #64748b; font-size: 0.8rem; font-weight: 600;">
-                                <i class='bx bx-message-rounded-dots'></i> <?= (int)$forum['totalReplies'] ?> Respuestas
-                            </div>
-                        </div>
+            <div>
+                <h2 style="margin:0;font-size:1.1rem;font-weight:800;color:#1e293b;">Foro Lector Operativo</h2>
+                <p style="margin:0;font-size:0.8rem;color:#64748b;">Tu espacio para preguntar, proponer y compartir.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL INLINE — Solo Lector Operativo -->
+    <?php
+    // Buscar el foro específico del Lector Operativo (no el General)
+    $loSpecificForumId = null;
+    $loSpecificForumTitle = 'Tu foro de equipo';
+    foreach ($forums as $lf) {
+        if ($lf['targetRole'] !== 'GENERAL') {
+            $loSpecificForumId = $lf['id'];
+            $loSpecificForumTitle = $lf['title'] ?? 'Foro Lector Operativo';
+            break;
+        }
+    }
+    // Fallback: si solo existe GENERAL, usarlo
+    if (!$loSpecificForumId && !empty($forums)) {
+        $loSpecificForumId = $forums[0]['id'];
+        $loSpecificForumTitle = $forums[0]['title'];
+    }
+    ?>
+    <div class="modal-overlay" id="modalLO" style="z-index:10000;">
+        <div class="modal-content" style="max-width:600px;">
+            <div class="modal-header" style="background:#fff7f0;border-bottom:2px solid #ffe4cc;">
+                <div>
+                    <h3 class="modal-title" style="margin:0;color:#1e293b;">Nuevo mensaje</h3>
+                    <p style="margin:0.2rem 0 0;font-size:0.8rem;color:#92400e;font-weight:600;">
+                        <i class='bx bx-chat'></i> <?= htmlspecialchars($loSpecificForumTitle) ?>
+                    </p>
+                </div>
+                <button class="modal-close" onclick="document.getElementById('modalLO').classList.remove('active')">
+                    <i class='bx bx-x'></i>
+                </button>
+            </div>
+            <form method="POST" action="index.php?view=forums">
+                <input type="hidden" name="action" value="lo_create_topic">
+                <input type="hidden" name="lo_forum_id" value="<?= htmlspecialchars($loSpecificForumId ?? '') ?>">
+                <input type="hidden" name="threadType" id="loThreadType" value="">
+
+                <!-- 3 botones de intención -->
+                <div class="form-group" style="margin-bottom:1.25rem;">
+                    <label class="form-label" style="margin-bottom:0.75rem;display:block;font-weight:700;">¿Qué quieres hacer? <span style="color:#ef4444;">*</span></label>
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;">
+                        <button type="button" onclick="setLOIntent('QUESTION',this)" id="lo_btn_Q"
+                            style="padding:0.9rem 0.4rem;border:2px solid #e2e8f0;border-radius:12px;background:#f8fafc;cursor:pointer;text-align:center;transition:all 0.2s;font-family:inherit;">
+                            <div style="font-size:1.4rem;margin-bottom:0.25rem;">❓</div>
+                            <div style="font-weight:700;font-size:0.75rem;color:#1e293b;">Tengo una pregunta</div>
+                        </button>
+                        <button type="button" onclick="setLOIntent('IMPROVEMENT',this)" id="lo_btn_I"
+                            style="padding:0.9rem 0.4rem;border:2px solid #e2e8f0;border-radius:12px;background:#f8fafc;cursor:pointer;text-align:center;transition:all 0.2s;font-family:inherit;">
+                            <div style="font-size:1.4rem;margin-bottom:0.25rem;">💡</div>
+                            <div style="font-weight:700;font-size:0.75rem;color:#1e293b;">Tengo una propuesta</div>
+                        </button>
+                        <button type="button" onclick="setLOIntent('CONTRIBUTION',this)" id="lo_btn_C"
+                            style="padding:0.9rem 0.4rem;border:2px solid #e2e8f0;border-radius:12px;background:#f8fafc;cursor:pointer;text-align:center;transition:all 0.2s;font-family:inherit;">
+                            <div style="font-size:1.4rem;margin-bottom:0.25rem;">⭐</div>
+                            <div style="font-weight:700;font-size:0.75rem;color:#1e293b;">Quiero compartir algo</div>
+                        </button>
+                    </div>
+                    <div id="loIntentErr" style="color:#ef4444;font-size:0.8rem;margin-top:0.5rem;display:none;">Por favor selecciona una opción.</div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Título</label>
+                    <input type="text" name="title" class="form-control" required maxlength="150" placeholder="¿Sobre qué es tu mensaje?">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Detalle</label>
+                    <textarea name="content" class="form-control" style="height:110px;resize:vertical;" required placeholder="Explica con más detalle..."></textarea>
+                </div>
+
+                <div style="display:flex;justify-content:flex-end;gap:1rem;margin-top:1.5rem;">
+                    <button type="button" class="btn" style="background:var(--bg-color);color:var(--text-main);"
+                        onclick="document.getElementById('modalLO').classList.remove('active')">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" onclick="return validateLO()">
+                        <i class='bx bx-send'></i> Publicar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+    function setLOIntent(type, el) {
+        document.getElementById('loThreadType').value = type;
+        ['lo_btn_Q','lo_btn_I','lo_btn_C'].forEach(id => {
+            const b = document.getElementById(id);
+            b.style.border = '2px solid #e2e8f0';
+            b.style.background = '#f8fafc';
+        });
+        el.style.border = '2px solid #FF6A00';
+        el.style.background = '#fff7f0';
+        document.getElementById('loIntentErr').style.display = 'none';
+    }
+    function validateLO() {
+        if (!document.getElementById('loThreadType').value) {
+            document.getElementById('loIntentErr').style.display = 'block';
+            return false;
+        }
+        return true;
+    }
+    </script>
+
+    <?php if (count($forums) > 0):
+        // Usar SOLO el foro específico del Lector Operativo (no GENERAL)
+        $loFeedForumId = null;
+        foreach ($forums as $lff) {
+            if ($lff['targetRole'] !== 'GENERAL') { $loFeedForumId = $lff['id']; break; }
+        }
+        if (!$loFeedForumId && !empty($forums)) $loFeedForumId = $forums[0]['id'];
+
+        // 📌 Respuestas útiles (validadas o pinned del foro LO)
+        $stmtPin = $pdo->prepare("
+            SELECT t.id, t.title, t.forumId,
+                   COALESCE(u.name,'[Usuario eliminado]') as authorName,
+                   (SELECT COUNT(*) FROM ForumReply WHERE topicId = t.id) as replies
+            FROM ForumTopic t
+            LEFT JOIN User u ON t.authorId = u.id
+            WHERE t.forumId = ?
+              AND (t.isValidatedPractice = 1 OR t.isPinned = 1)
+            ORDER BY t.isPinned DESC, t.updatedAt DESC
+            LIMIT 5
+        ");
+        $stmtPin->execute([$loFeedForumId]);
+        $pinnedTopics = $stmtPin->fetchAll();
+
+        // 💬 Actividad reciente SOLO del foro LO
+        $stmtRec = $pdo->prepare("
+            SELECT t.id, t.title, t.forumId, t.updatedAt,
+                   COALESCE(u.name,'[Usuario eliminado]') as authorName,
+                   (SELECT COUNT(*) FROM ForumReply WHERE topicId = t.id) as replies
+            FROM ForumTopic t
+            LEFT JOIN User u ON t.authorId = u.id
+            WHERE t.forumId = ?
+              AND t.isValidatedPractice = 0
+            ORDER BY t.updatedAt DESC
+            LIMIT 8
+        ");
+        $stmtRec->execute([$loFeedForumId]);
+        $recentTopics = $stmtRec->fetchAll();
+    ?>
+    <div style="padding: 1rem 1.5rem 2rem;">
+
+        <?php if (!empty($pinnedTopics)): ?>
+        <!-- 📌 RESPUESTAS ÚTILES -->
+        <div style="margin-bottom: 2rem;">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
+                <span style="font-size:1.1rem;">📌</span>
+                <h3 style="margin:0;font-size:0.95rem;font-weight:800;color:#1e293b;">Respuestas útiles para tu equipo</h3>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            <?php foreach ($pinnedTopics as $pt): ?>
+                <a href="index.php?view=forum_topic&forum_id=<?= urlencode($pt['forumId']) ?>&topic_id=<?= urlencode($pt['id']) ?>"
+                   style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem 1rem;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;text-decoration:none;transition:background 0.15s;"
+                   onmouseover="this.style.background='#fef3c7'" onmouseout="this.style.background='#fffbeb'">
+                    <div>
+                        <div style="font-weight:700;font-size:0.9rem;color:#1e293b;"><?= htmlspecialchars($pt['title']) ?></div>
+                        <div style="font-size:0.75rem;color:#92400e;margin-top:0.2rem;">por <?= htmlspecialchars($pt['authorName']) ?></div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:0.3rem;color:#92400e;font-size:0.8rem;font-weight:700;flex-shrink:0;margin-left:1rem;">
+                        <i class='bx bx-message-rounded-dots'></i> <?= (int)$pt['replies'] ?>
                     </div>
                 </a>
             <?php endforeach; ?>
             </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- 💬 ACTIVIDAD RECIENTE -->
+        <?php if (!empty($recentTopics)): ?>
+        <div style="margin-bottom: 5rem;">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
+                <span style="font-size:1.1rem;">💬</span>
+                <h3 style="margin:0;font-size:0.95rem;font-weight:800;color:#1e293b;">Actividad reciente en tu unidad</h3>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            <?php foreach ($recentTopics as $rt): ?>
+                <a href="index.php?view=forum_topic&forum_id=<?= urlencode($rt['forumId']) ?>&topic_id=<?= urlencode($rt['id']) ?>"
+                   style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem 1rem;background:white;border:1px solid #e2e8f0;border-radius:10px;text-decoration:none;transition:background 0.15s;"
+                   onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                    <div style="min-width:0;">
+                        <div style="font-weight:600;font-size:0.9rem;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                            <?= htmlspecialchars($rt['title']) ?>
+                        </div>
+                        <div style="font-size:0.75rem;color:#64748b;margin-top:0.2rem;">
+                            por <?= htmlspecialchars($rt['authorName']) ?> · <?= date('d/m H:i', strtotime($rt['updatedAt'])) ?>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:0.3rem;color:#64748b;font-size:0.8rem;font-weight:600;flex-shrink:0;margin-left:1rem;">
+                        <i class='bx bx-message-rounded-dots'></i> <?= (int)$rt['replies'] ?>
+                    </div>
+                </a>
+            <?php endforeach; ?>
+            </div>
+        </div>
+        <?php elseif (empty($pinnedTopics)): ?>
+        <div style="text-align:center;padding:3rem 1rem;color:#9ca3af;">
+            <i class='bx bx-comment-dots' style="font-size:2.5rem;margin-bottom:0.75rem;display:block;"></i>
+            <p style="margin:0;font-size:0.9rem;">Aún no hay actividad en tu unidad.<br>¡Sé el primero en preguntar!</p>
+        </div>
+        <?php endif; ?>
+
+    </div>
+
+    <!-- FAB — único botón de acción para Lector Operativo -->
+    <button onclick="document.getElementById('modalLO').classList.add('active')"
+       style="position:fixed;bottom:2rem;right:2rem;background:#FF6A00;color:white;padding:0.9rem 1.4rem;border-radius:50px;border:none;cursor:pointer;font-weight:800;font-size:0.95rem;box-shadow:0 4px 20px rgba(255,106,0,0.5);display:flex;align-items:center;gap:0.5rem;z-index:9999;transition:transform 0.2s;font-family:inherit;"
+       onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform='scale(1)'">
+        <i class='bx bx-edit' style="font-size:1.1rem;"></i> Nuevo mensaje
+    </button>
+
         </main>
+
+    <?php else: // LO sin foros — estado vacío ?>
+        <div style="text-align:center;padding:4rem 1rem;color:#9ca3af;">
+            <i class='bx bx-comment-x' style="font-size:3rem;margin-bottom:1rem;display:block;"></i>
+            <p>Aún no tienes foros asignados.</p>
+        </div>
+        </main>
+
+    <?php endif; // fin if(count>0) dentro del bloque LO ?>
+
+<?php else: // ── NON-LO — vista moderna de canales ──
+        $buTotalTopics  = array_sum(array_column($forums, 'totalTopics'));
+        $buTotalReplies = array_sum(array_column($forums, 'totalReplies'));
+        $buTotalForums  = count($forums);
+
+        $myTopicCount = 0;
+        if ($userId && $buTotalForums > 0) {
+            $fIds = array_column($forums, 'id');
+            $ph   = implode(',', array_fill(0, count($fIds), '?'));
+            $stMy = $pdo->prepare("SELECT COUNT(*) FROM ForumTopic WHERE authorId = ? AND forumId IN ($ph)");
+            $stMy->execute(array_merge([$userId], $fIds));
+            $myTopicCount = (int)$stMy->fetchColumn();
+        }
+
+        if (!function_exists('forumCardStyle')) {
+            function forumCardStyle($trName, $targetRole) {
+                $k = strtolower($trName ?: $targetRole);
+                if ($targetRole === 'GENERAL')               return ['bx-conversation',   '135deg,#3b82f6,#2563eb'];
+                if (str_contains($k,'auditor'))              return ['bx-shield',          '135deg,#ef4444,#dc2626'];
+                if (str_contains($k,'modelad'))              return ['bx-cube-alt',        '135deg,#8b5cf6,#7c3aed'];
+                if (str_contains($k,'integrad'))             return ['bx-git-branch',      '135deg,#14b8a6,#0d9488'];
+                if (str_contains($k,'lector'))               return ['bx-book-reader',     '135deg,#10b981,#059669'];
+                if (str_contains($k,'coordinad'))            return ['bx-grid-alt',        '135deg,#f59e0b,#d97706'];
+                if (str_contains($k,'analista'))             return ['bx-bar-chart-alt-2', '135deg,#6366f1,#4f46e5'];
+                if (str_contains($k,'aprob'))                return ['bx-check-shield',    '135deg,#ec4899,#db2777'];
+                if (str_contains($k,'participante'))         return ['bx-group',           '135deg,#06b6d4,#0891b2'];
+                if (str_contains($k,'ti') || str_contains($k,'admin ti')) return ['bx-chip','135deg,#64748b,#475569'];
+                return                                              ['bx-star',             '135deg,#FF6A00,#FFA500'];
+            }
+        }
+
+        // Foro Corporativo (GENERAL de empresa, sin BU) — solo para usuarios que SÍ tienen BU asignada.
+        // Si el usuario no tiene BU ($myBuId === null), ya está viendo foros a nivel Corporativo
+        // como su vista principal, por lo que mostrar este panel causaria duplicados.
+        $corpForums = [];
+        if (!$isAdmin && !$isCoLeader && $viewCompanyId && $myBuId) {
+            $stmtCorp = $pdo->prepare("
+                SELECT f.*,
+                       tr.name as trName,
+                       (SELECT COUNT(id) FROM ForumTopic WHERE forumId = f.id) as totalTopics,
+                       (SELECT COUNT(r.id) FROM ForumReply r JOIN ForumTopic t ON r.topicId = t.id WHERE t.forumId = f.id) as totalReplies
+                FROM Forum f
+                LEFT JOIN TrainingRole tr ON f.targetRole = tr.id
+                WHERE f.companyId = ?
+                  AND f.businessUnitId IS NULL
+                  AND f.targetRole = 'GENERAL'
+                LIMIT 1
+            ");
+            $stmtCorp->execute([$viewCompanyId]);
+            $corpForums = $stmtCorp->fetchAll();
+        }
+    ?>
+
+    <h1 style="font-size:1.75rem;font-weight:700;color:#111827;margin:0 0 1.5rem 0;">Foros</h1>
+
+    <!-- ── STATS — misma estructura que Inicio/Certificados ── -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1.25rem;margin-bottom:1.5rem;width:100%;">
+
+
+        <!-- Canales — dark card -->
+        <div style="background:linear-gradient(135deg,#111827,#1f2937,#111827);border-radius:1rem;padding:1.5rem;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);border:1px solid #374151;color:white;position:relative;overflow:hidden;">
+            <div style="position:absolute;top:0;right:0;width:96px;height:96px;background:rgba(255,106,0,0.1);border-radius:50%;transform:translate(50%,-50%);filter:blur(40px);"></div>
+            <div style="position:relative;z-index:10;">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                    <div style="width:48px;height:48px;border-radius:1rem;background:rgba(255,106,0,0.2);display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,106,0,0.3);">
+                        <i class='bx bx-conversation' style="color:#FF6A00;font-size:1.5rem;"></i>
+                    </div>
+                    <h3 style="font-size:0.875rem;font-weight:600;color:#d1d5db;margin:0;">Foros</h3>
+                </div>
+                <p style="font-size:2.25rem;font-weight:700;color:white;margin:0;"><?= $buTotalForums ?></p>
+                <p style="font-size:0.75rem;color:#9ca3af;margin:4px 0 0;">Foros activos en esta unidad</p>
+            </div>
+        </div>
+
+        <!-- Hilos -->
+        <div style="background:white;border-radius:1rem;padding:1.5rem;border:1px solid #f3f4f6;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                <div style="width:48px;height:48px;border-radius:1rem;background:linear-gradient(135deg,#3b82f6,#2563eb);display:flex;align-items:center;justify-content:center;">
+                    <i class='bx bx-list-ul' style="color:white;font-size:1.5rem;"></i>
+                </div>
+                <h3 style="font-size:0.875rem;font-weight:600;color:#6b7280;margin:0;">Hilos</h3>
+            </div>
+            <p style="font-size:2.25rem;font-weight:700;color:#111827;margin:0;"><?= $buTotalTopics ?></p>
+            <p style="font-size:0.75rem;color:#6b7280;margin:4px 0 0;">Discusiones totales</p>
+        </div>
+
+        <!-- Respuestas -->
+        <div style="background:white;border-radius:1rem;padding:1.5rem;border:1px solid #f3f4f6;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                <div style="width:48px;height:48px;border-radius:1rem;background:linear-gradient(135deg,#a855f7,#7c3aed);display:flex;align-items:center;justify-content:center;">
+                    <i class='bx bx-message-rounded-dots' style="color:white;font-size:1.5rem;"></i>
+                </div>
+                <h3 style="font-size:0.875rem;font-weight:600;color:#6b7280;margin:0;">Respuestas</h3>
+            </div>
+            <p style="font-size:2.25rem;font-weight:700;color:#111827;margin:0;"><?= $buTotalReplies ?></p>
+            <p style="font-size:0.75rem;color:#6b7280;margin:4px 0 0;">Participaciones totales</p>
+        </div>
+
+        <!-- Mis temas -->
+        <div style="background:white;border-radius:1rem;padding:1.5rem;border:1px solid #f3f4f6;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                <div style="width:48px;height:48px;border-radius:1rem;background:linear-gradient(135deg,#FF6A00,#FFA500);display:flex;align-items:center;justify-content:center;">
+                    <i class='bx bx-edit' style="color:white;font-size:1.5rem;"></i>
+                </div>
+                <h3 style="font-size:0.875rem;font-weight:600;color:#6b7280;margin:0;">Mis temas</h3>
+            </div>
+            <p style="font-size:2.25rem;font-weight:700;color:#111827;margin:0;"><?= $myTopicCount ?></p>
+            <p style="font-size:0.75rem;color:#6b7280;margin:4px 0 0;">Publicados por mí</p>
+        </div>
+
+    </div>
+
+    <!-- ── PANEL CANALES (nuevo panel blanco para las cards) ── -->
+    <div style="background:white;border-radius:24px;box-shadow:0 10px 40px rgba(0,0,0,0.03);overflow:hidden;border:1px solid rgba(0,0,0,0.04);margin-bottom:2rem;">
+
+        <!-- Section title -->
+        <div style="padding:1.25rem 1.5rem 0.75rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #f1f5f9;">
+            <div>
+                <h2 style="margin:0;font-size:1rem;font-weight:800;color:#1e293b;">Foros de <?= htmlspecialchars($displayBuName) ?></h2>
+                <p style="margin:0;font-size:0.78rem;color:#64748b;margin-top:0.15rem;">Selecciona un foro para ver y participar en sus discusiones</p>
+            </div>
+        </div>
+
+        <!-- Forum cards -->
+        <?php if ($buTotalForums === 0): ?>
+            <div style="text-align:center;padding:4rem;color:#9ca3af;">
+                <i class='bx bx-message-alt-x' style="font-size:3rem;margin-bottom:1rem;display:block;"></i>
+                <h3 style="margin:0 0 0.5rem;">Sin Canales Disponibles</h3>
+                <p style="margin:0;font-size:0.9rem;">Aún no se han generado canales de discusión para este segmento.</p>
+            </div>
+        <?php else: ?>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:1rem;padding:1.25rem 1.5rem 1.5rem;">
+            <?php foreach ($forums as $forum):
+                [$icon, $grad] = forumCardStyle($forum['trName'] ?? '', $forum['targetRole']);
+            ?>
+                <div class="forum-card-wrap">
+                <a href="index.php?view=forum_topic&forum_id=<?= urlencode($forum['id']) ?>"
+                   style="display:block;text-decoration:none;color:inherit;">
+                    <div style="background:#f8fafc;border-radius:16px;padding:1.25rem;border:1px solid #e2e8f0;cursor:pointer;
+                                transition:transform 0.2s,box-shadow 0.2s,border-color 0.2s;height:100%;display:flex;flex-direction:column;"
+                         onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 24px -4px rgba(0,0,0,0.1)';this.style.borderColor='#FF6A00';this.style.background='white';"
+                         onmouseout="this.style.transform='none';this.style.boxShadow='none';this.style.borderColor='#e2e8f0';this.style.background='#f8fafc';">
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.9rem;">
+                            <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(<?= $grad ?>);
+                                        display:flex;align-items:center;justify-content:center;flex-shrink:0;
+                                        box-shadow:0 4px 8px rgba(0,0,0,0.15);">
+                                <i class='bx <?= $icon ?>' style="font-size:1.3rem;color:white;"></i>
+                            </div>
+                            <?php if ($forum['targetRole'] === 'GENERAL'): ?>
+                            <span style="background:#eff6ff;color:#2563eb;padding:0.2rem 0.5rem;border-radius:20px;font-size:0.6rem;font-weight:800;text-transform:uppercase;">General</span>
+                            <?php endif; ?>
+                        </div>
+                        <h3 style="font-size:0.95rem;font-weight:800;color:#1e293b;margin:0 0 0.35rem;line-height:1.3;">
+                            <?= htmlspecialchars($forum['title']) ?>
+                        </h3>
+                        <p style="font-size:0.78rem;color:#64748b;line-height:1.5;margin:0 0 1rem;
+                                   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:1;">
+                            <?= htmlspecialchars($forum['description']) ?>
+                        </p>
+                        <div style="display:flex;gap:0.75rem;border-top:1px solid #e2e8f0;padding-top:0.75rem;margin-top:auto;">
+                            <div style="display:flex;align-items:center;gap:0.3rem;color:#64748b;font-size:0.75rem;font-weight:600;">
+                                <i class='bx bx-list-ul' style="color:#3b82f6;"></i>
+                                <span><?= (int)$forum['totalTopics'] ?> hilos</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:0.3rem;color:#64748b;font-size:0.75rem;font-weight:600;">
+                                <i class='bx bx-message-rounded-dots' style="color:#8b5cf6;"></i>
+                                <span><?= (int)$forum['totalReplies'] ?> respuestas</span>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+                </div>
+            <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+    </div><!-- fin panel foros BU -->
     <?php endif; ?>
 
-<?php endif; ?>
-</div>
+    <!-- ── PANEL CORPORATIVO — Foro General de empresa (visible para estudiantes y BU Leader) ── -->
+    <?php if (!empty($corpForums)): ?>
+    <div style="background:white;border-radius:24px;box-shadow:0 10px 40px rgba(0,0,0,0.03);overflow:hidden;border:1px solid rgba(0,0,0,0.04);margin-top:1.5rem;margin-bottom:2rem;">
+        <div style="padding:1.25rem 1.5rem 0.75rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #f1f5f9;">
+            <div style="display:flex;align-items:center;gap:0.75rem;">
+                <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#4f46e5);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <i class='bx bx-buildings' style="color:white;font-size:1.1rem;"></i>
+                </div>
+                <div>
+                    <h2 style="margin:0;font-size:1rem;font-weight:800;color:#1e293b;">Foros Corporativos</h2>
+                    <p style="margin:0;font-size:0.78rem;color:#64748b;margin-top:0.15rem;">Espacio de comunicación abierto a toda la empresa</p>
+                </div>
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:1rem;padding:1.25rem 1.5rem 1.5rem;">
+        <?php foreach ($corpForums as $cf):
+            [$cfIcon, $cfGrad] = forumCardStyle($cf['trName'] ?? '', $cf['targetRole']);
+        ?>
+            <div class="forum-card-wrap">
+            <a href="index.php?view=forum_topic&forum_id=<?= urlencode($cf['id']) ?>"
+               style="display:block;text-decoration:none;color:inherit;">
+                <div style="background:#f8fafc;border-radius:16px;padding:1.25rem;border:1px solid #e2e8f0;cursor:pointer;
+                            transition:transform 0.2s,box-shadow 0.2s,border-color 0.2s;height:100%;display:flex;flex-direction:column;"
+                     onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 10px 15px -3px rgba(0,0,0,0.1)';this.style.borderColor='#6366f1';"
+                     onmouseout="this.style.transform='none';this.style.boxShadow='none';this.style.borderColor='#e2e8f0';">
+                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+                        <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(<?= $cfGrad ?>);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class='bx <?= $cfIcon ?>' style="color:white;font-size:1.25rem;"></i>
+                        </div>
+                        <div>
+                            <h3 style="margin:0;font-size:0.9rem;font-weight:700;color:#1e293b;"><?= htmlspecialchars($cf['title'] ?? 'Foro General') ?></h3>
+                            <span style="font-size:0.72rem;color:#6366f1;font-weight:600;background:#eef2ff;padding:2px 8px;border-radius:999px;">Corporativo</span>
+                        </div>
+                    </div>
+                    <p style="margin:0 0 auto;font-size:0.82rem;color:#64748b;line-height:1.5;"><?= htmlspecialchars($cf['description'] ?? '') ?></p>
+                    <div style="display:flex;gap:0.75rem;border-top:1px solid #e2e8f0;padding-top:0.75rem;margin-top:0.75rem;">
+                        <div style="display:flex;align-items:center;gap:0.3rem;color:#64748b;font-size:0.75rem;font-weight:600;">
+                            <i class='bx bx-list-ul' style="color:#6366f1;"></i>
+                            <span><?= (int)$cf['totalTopics'] ?> hilos</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:0.3rem;color:#64748b;font-size:0.75rem;font-weight:600;">
+                            <i class='bx bx-message-rounded-dots' style="color:#8b5cf6;"></i>
+                            <span><?= (int)$cf['totalReplies'] ?> respuestas</span>
+                        </div>
+                    </div>
+                </div>
+            </a>
+            </div>
+        <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
+<?php endif; // fin if($isLectorOp) - rama no-LO ?>
+
+
+
+
+
+

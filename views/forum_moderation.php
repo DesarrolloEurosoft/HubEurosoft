@@ -20,13 +20,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 $sql = "
     SELECT 
         t.id, t.forumId, t.title, t.threadType, t.views, t.isValidatedPractice, t.createdAt, 
-        u.name as authorName, u.role as authorRole,
+        COALESCE(u.name, '[Usuario eliminado]') as authorName,
+        COALESCE(u.role, 'STUDENT') as authorRole,
         c.name as companyName,
         bu.name as buName,
         (SELECT COUNT(*) FROM ForumReply WHERE topicId = t.id) as totalReplies,
         f.title as forumName
     FROM ForumTopic t
-    JOIN User u ON t.authorId = u.id
+    LEFT JOIN User u ON t.authorId = u.id
     JOIN Forum f ON t.forumId = f.id
     LEFT JOIN Company c ON f.companyId = c.id
     LEFT JOIN BusinessUnit bu ON f.businessUnitId = bu.id
@@ -35,11 +36,13 @@ $sql = "
 $topics = $pdo->query($sql)->fetchAll();
 
 function typeBadge($type) {
-    if($type === 'GOOD_PRACTICE') return "<span style='background:#fef08a;color:#854d0e;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bxs-medal'></i> Buena Práctica</span>";
-    if($type === 'METHODOLOGY') return "<span style='background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-brain'></i> Metodología</span>";
+    if($type === 'QUESTION')       return "<span style='background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-help-circle'></i> Pregunta</span>";
+    if($type === 'IMPROVEMENT')    return "<span style='background:#dcfce7;color:#166534;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-bulb'></i> Propuesta</span>";
+    if($type === 'CONTRIBUTION')   return "<span style='background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bxs-star'></i> Aporte</span>";
+    if($type === 'GOOD_PRACTICE')  return "<span style='background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bxs-medal'></i> Buena Práctica</span>";
+    if($type === 'METHODOLOGY')    return "<span style='background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-brain'></i> Metodología</span>";
     if($type === 'SUITE_QUESTION') return "<span style='background:#fce7f3;color:#be185d;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-desktop'></i> Dudas Suite</span>";
-    if($type === 'HUB_QUESTION') return "<span style='background:#f3e8ff;color:#7e22ce;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-cube-alt'></i> Duda HubEurosoft</span>";
-    if($type === 'IMPROVEMENT') return "<span style='background:#dcfce7;color:#166534;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-bulb'></i> Mejora</span>";
+    if($type === 'HUB_QUESTION')   return "<span style='background:#f3e8ff;color:#7e22ce;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-cube-alt'></i> Duda Hub</span>";
     return "<span style='background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'>".htmlspecialchars($type)."</span>";
 }
 ?>
@@ -117,12 +120,18 @@ function typeBadge($type) {
                                     <input type="hidden" name="action" value="change_type">
                                     <input type="hidden" name="topic_id" value="<?= htmlspecialchars($t['id']) ?>">
                                     <select name="new_type" onchange="this.form.submit()" style="padding: 0.25rem; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px; background: white; color: #475569; outline: none; cursor: pointer; width: 100%;">
-                                        <option value="GENERAL" <?= $t['threadType'] == 'GENERAL' ? 'selected' : '' ?>>General</option>
-                                        <option value="GOOD_PRACTICE" <?= $t['threadType'] == 'GOOD_PRACTICE' ? 'selected' : '' ?>>Buena Práctica</option>
-                                        <option value="METHODOLOGY" <?= $t['threadType'] == 'METHODOLOGY' ? 'selected' : '' ?>>Metodología</option>
-                                        <option value="SUITE_QUESTION" <?= $t['threadType'] == 'SUITE_QUESTION' ? 'selected' : '' ?>>Duda Suite</option>
-                                        <option value="HUB_QUESTION" <?= $t['threadType'] == 'HUB_QUESTION' ? 'selected' : '' ?>>Duda sobre HubEurosoft</option>
-                                        <option value="IMPROVEMENT" <?= $t['threadType'] == 'IMPROVEMENT' ? 'selected' : '' ?>>Mejora</option>
+                                        <optgroup label="Modelo nuevo">
+                                            <option value="QUESTION"     <?= $t['threadType'] == 'QUESTION'     ? 'selected' : '' ?>>❓ Pregunta</option>
+                                            <option value="IMPROVEMENT"  <?= $t['threadType'] == 'IMPROVEMENT'  ? 'selected' : '' ?>>💡 Propuesta</option>
+                                            <option value="CONTRIBUTION" <?= $t['threadType'] == 'CONTRIBUTION' ? 'selected' : '' ?>>⭐ Aporte</option>
+                                        </optgroup>
+                                        <optgroup label="Tipos anteriores">
+                                            <option value="GOOD_PRACTICE"  <?= $t['threadType'] == 'GOOD_PRACTICE'  ? 'selected' : '' ?>>Buena Práctica</option>
+                                            <option value="METHODOLOGY"    <?= $t['threadType'] == 'METHODOLOGY'    ? 'selected' : '' ?>>Metodología</option>
+                                            <option value="SUITE_QUESTION" <?= $t['threadType'] == 'SUITE_QUESTION' ? 'selected' : '' ?>>Duda Suite</option>
+                                            <option value="HUB_QUESTION"   <?= $t['threadType'] == 'HUB_QUESTION'   ? 'selected' : '' ?>>Duda Hub</option>
+                                            <option value="GENERAL"        <?= $t['threadType'] == 'GENERAL'        ? 'selected' : '' ?>>General</option>
+                                        </optgroup>
                                     </select>
                                 </form>
                             </td>

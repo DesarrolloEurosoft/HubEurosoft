@@ -30,18 +30,33 @@ function getRoleBadge($role) {
 
 if (!function_exists('typeBadge')) {
     function typeBadge($type) {
-        if($type === 'GOOD_PRACTICE') return "<span style='background:#fef08a;color:#854d0e;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bxs-medal'></i> Buena Práctica</span>";
-        if($type === 'METHODOLOGY') return "<span style='background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-brain'></i> Metodología</span>";
-        if($type === 'SUITE_QUESTION') return "<span style='background:#fce7f3;color:#be185d;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-desktop'></i> Dudas Suite</span>";
-        if($type === 'HUB_QUESTION') return "<span style='background:#f3e8ff;color:#7e22ce;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-cube-alt'></i> Duda HubEurosoft</span>";
-        if($type === 'IMPROVEMENT') return "<span style='background:#dcfce7;color:#166534;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-bulb'></i> Mejora</span>";
+        // Nuevos tipos (modelo de 3 intenciones)
+        if($type === 'QUESTION')     return "<span style='background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-help-circle'></i> Pregunta</span>";
+        if($type === 'IMPROVEMENT')  return "<span style='background:#dcfce7;color:#166534;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-bulb'></i> Propuesta</span>";
+        if($type === 'CONTRIBUTION') return "<span style='background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bxs-star'></i> Aporte</span>";
+        // Tipos legados (compatibilidad)
+        if($type === 'GOOD_PRACTICE')    return "<span style='background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bxs-medal'></i> Buena Práctica</span>";
+        if($type === 'METHODOLOGY')      return "<span style='background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-brain'></i> Metodología</span>";
+        if($type === 'SUITE_QUESTION')   return "<span style='background:#fce7f3;color:#be185d;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-desktop'></i> Dudas Suite</span>";
+        if($type === 'HUB_QUESTION')     return "<span style='background:#f3e8ff;color:#7e22ce;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-cube-alt'></i> Duda Hub</span>";
+        if($type === 'CLIENT_INSTRUCTION') return "<span style='background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'><i class='bx bx-flag'></i> Instrucción</span>";
         return "<span style='background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;'>".htmlspecialchars($type)."</span>";
     }
 }
 
+
 $forumId = $_GET['forum_id'] ?? '';
 $topicId = $_GET['topic_id'] ?? '';
-$mode = $topicId ? 'read' : 'list'; // 'list' = ver hilos, 'read' = ver respuestas dentro de un hilo
+$mode = $topicId ? 'read' : 'list';
+
+// Detectar si el usuario actual es LECTOR OPERATIVO
+$isLectorOp = false;
+if ($userId) {
+    $stmtLO = $pdo->prepare("SELECT 1 FROM TrainingRole tr JOIN _TrainingRoleToUser rtu ON rtu.A = tr.id WHERE rtu.B = ? AND LOWER(tr.name) LIKE '%lector%operativo%' LIMIT 1");
+    $stmtLO->execute([$userId]);
+    $isLectorOp = (bool)$stmtLO->fetchColumn();
+}
+
 
 // =========================================
 // 1. Validar Permisos al Foro
@@ -64,6 +79,11 @@ $hasPostingRights = true;
 
 // Check RBAC
 if (!$isAdmin) {
+    // Guardia: si la sesión no tiene companyId, bloquear a no-admins
+    if (!$myCompanyId) {
+        echo "<div class='alert alert-error'>Acceso no disponible: tu sesión no está vinculada a una organización. Vuelve a iniciar sesión.</div>";
+        return;
+    }
     if ($forum['companyId'] !== $myCompanyId) {
         echo "<div class='alert alert-error'>Acceso Denegado: Este foro pertenece a otra compañía.</div>";
         return;
@@ -91,6 +111,11 @@ if (!$isAdmin) {
         }
     }
 }
+
+// Permisos de moderación por rol y scope
+$canModerate = $isAdmin
+    || ($isCoLeader && $forum['companyId'] === $myCompanyId)
+    || ($isBuLeader && $forum['businessUnitId'] !== null && $forum['businessUnitId'] === $myBuId);
 
 // =========================================
 // 2. Procesar POSTs
@@ -158,15 +183,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $errorMsg = "El mensaje no puede estar vacío.";
             }
         }
-        elseif ($action === 'delete_topic' && $isAdmin) {
+        elseif ($action === 'delete_topic' && $canModerate) {
             $delId = $_POST['del_id'] ?? '';
-            $pdo->prepare("DELETE FROM ForumTopic WHERE id = ?")->execute([$delId]);
+            if ($delId) {
+                // Cascada: borrar interacciones de respuestas
+                $stmtRIds = $pdo->prepare("SELECT id FROM ForumReply WHERE topicId = ?");
+                $stmtRIds->execute([$delId]);
+                $rIdList = $stmtRIds->fetchAll(PDO::FETCH_COLUMN);
+                if (!empty($rIdList)) {
+                    $ph = implode(',', array_fill(0, count($rIdList), '?'));
+                    $pdo->prepare("DELETE FROM ForumReplyLike WHERE replyId IN ($ph)")->execute($rIdList);
+                    $pdo->prepare("DELETE FROM ForumReplyHelpfulVote WHERE replyId IN ($ph)")->execute($rIdList);
+                }
+                $pdo->prepare("DELETE FROM ForumReply WHERE topicId = ?")->execute([$delId]);
+                try { $pdo->prepare("DELETE FROM ForumTopicLike WHERE topicId = ?")->execute([$delId]); } catch(Exception $e) {}
+                $pdo->prepare("DELETE FROM ForumTopic WHERE id = ?")->execute([$delId]);
+            }
             echo "<script>window.location.href='index.php?view=forum_topic&forum_id=".urlencode($forumId)."';</script>";
             exit;
         }
-        elseif ($action === 'delete_reply' && $isAdmin) {
+        elseif ($action === 'delete_reply' && $canModerate) {
             $delId = $_POST['del_id'] ?? '';
-            $pdo->prepare("DELETE FROM ForumReply WHERE id = ?")->execute([$delId]);
+            if ($delId) {
+                // Cascada: borrar respuestas hijas y sus interacciones
+                $stmtCh = $pdo->prepare("SELECT id FROM ForumReply WHERE parentReplyId = ?");
+                $stmtCh->execute([$delId]);
+                $childIds = $stmtCh->fetchAll(PDO::FETCH_COLUMN);
+                foreach ($childIds as $cId) {
+                    $pdo->prepare("DELETE FROM ForumReplyLike WHERE replyId = ?")->execute([$cId]);
+                    $pdo->prepare("DELETE FROM ForumReplyHelpfulVote WHERE replyId = ?")->execute([$cId]);
+                }
+                if (!empty($childIds)) { $pdo->prepare("DELETE FROM ForumReply WHERE parentReplyId = ?")->execute([$delId]); }
+                $pdo->prepare("DELETE FROM ForumReplyLike WHERE replyId = ?")->execute([$delId]);
+                $pdo->prepare("DELETE FROM ForumReplyHelpfulVote WHERE replyId = ?")->execute([$delId]);
+                $pdo->prepare("DELETE FROM ForumReply WHERE id = ?")->execute([$delId]);
+            }
             $successMsg = "Comentario eliminado por Moderación.";
         }
     } catch(PDOException $e) {
@@ -212,17 +263,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ----------------------------------------------------------------------
 // MODO: LISATDO DE HILOS (TOPICS)
 // ----------------------------------------------------------------------
-if ($mode === 'list'): 
+if ($mode === 'list'):
+    // Paginación de hilos
+    $tPage    = max(1, (int)($_GET['page'] ?? 1));
+    $tPerPage = 15;
+    $tOffset  = ($tPage - 1) * $tPerPage;
+
+    $stmtTCount = $pdo->prepare("SELECT COUNT(id) FROM ForumTopic WHERE forumId = ?");
+    $stmtTCount->execute([$forumId]);
+    $tTotal = (int)$stmtTCount->fetchColumn();
+    $tPages = max(1, (int)ceil($tTotal / $tPerPage));
+
     $stmtTopics = $pdo->prepare("
-        SELECT t.*, u.name as authorName, u.email as authorEmail, u.role as authorRole,
+        SELECT t.*,
+               COALESCE(u.name, '[Usuario eliminado]') as authorName,
+               COALESCE(u.email, '') as authorEmail,
+               COALESCE(u.role, 'STUDENT') as authorRole,
                COALESCE(bu.name, 'Corporativo') as authorBuName,
                (SELECT COUNT(r.id) FROM ForumReply r WHERE r.topicId = t.id) as replyCount,
                (SELECT r2.createdAt FROM ForumReply r2 WHERE r2.topicId = t.id ORDER BY r2.createdAt DESC LIMIT 1) as lastActivity
         FROM ForumTopic t
-        JOIN User u ON t.authorId = u.id
+        LEFT JOIN User u ON t.authorId = u.id
         LEFT JOIN BusinessUnit bu ON u.businessUnitId = bu.id
         WHERE t.forumId = ?
         ORDER BY t.isPinned DESC, GREATEST(t.updatedAt, COALESCE((SELECT r2.createdAt FROM ForumReply r2 WHERE r2.topicId = t.id ORDER BY r2.createdAt DESC LIMIT 1), t.updatedAt)) DESC
+        LIMIT $tPerPage OFFSET $tOffset
     ");
     $stmtTopics->execute([$forumId]);
     $topics = $stmtTopics->fetchAll();
@@ -293,6 +358,19 @@ if ($mode === 'list'):
         </div>
     </div>
 
+    <?php if ($tPages > 1): ?>
+    <div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:1.25rem;flex-wrap:wrap;">
+        <?php
+        $baseTopicUrl = 'index.php?view=forum_topic&forum_id='.urlencode($forumId);
+        for ($pi = 1; $pi <= $tPages; $pi++):
+            $isActive = $pi === $tPage;
+            $bgStyle  = $isActive ? 'background:#FF6A00;color:white;' : 'background:#f3f4f6;color:#374151;';
+        ?>
+        <a href="<?= $baseTopicUrl ?>&page=<?= $pi ?>" style="<?= $bgStyle ?>padding:7px 14px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.875rem;"><?= $pi ?></a>
+        <?php endfor; ?>
+    </div>
+    <?php endif; ?>
+
     <!-- Modal Formulario Tema Nuevo -->
     <div class="modal-overlay" id="modalCT">
         <div class="modal-content" style="max-width: 650px;">
@@ -300,36 +378,97 @@ if ($mode === 'list'):
                 <h3 class="modal-title">Iniciar Nuevo Tema</h3>
                 <button class="modal-close" onclick="document.getElementById('modalCT').classList.remove('active')"><i class='bx bx-x'></i></button>
             </div>
-            <form method="POST">
+            <form method="POST" id="formNewTopic">
                 <input type="hidden" name="action" value="create_topic">
+
+                <?php if ($isLectorOp): ?>
+                <!-- LECTOR OPERATIVO: 3 botones de intención -->
+                <input type="hidden" name="threadType" id="threadTypeInput" value="">
                 <div class="form-group">
-                    <label class="form-label">Tipo de Hilo (Obligatorio)</label>
-                    <select name="threadType" class="form-control" required style="cursor:pointer; appearance:auto;">
-                        <option value="" disabled selected>-- Elige una categoría metodológica --</option>
-                        <option value="METHODOLOGY">Duda metodológica</option>
-                        <option value="SUITE_QUESTION">Duda técnica sobre la Suite</option>
-                        <option value="HUB_QUESTION">Duda sobre HubEurosoft</option>
-                        <option value="CLIENT_INSTRUCTION">Instrucción oficial del Cliente</option>
-                        <option value="IMPROVEMENT">Propuesta de mejora</option>
-                        <option value="GOOD_PRACTICE">Buena práctica (Pendiente de validación)</option>
-                        <option value="GENERAL">Comunicación general / Otros</option>
+                    <label class="form-label" style="margin-bottom:0.75rem;display:block;">¿Qué quieres hacer? <span style="color:#ef4444;">*</span></label>
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;">
+                        <button type="button" onclick="selectIntent('QUESTION',this)" id="btn_QUESTION"
+                            style="padding:1rem 0.5rem;border:2px solid #e2e8f0;border-radius:12px;background:#f8fafc;cursor:pointer;text-align:center;transition:all 0.2s;font-family:inherit;">
+                            <div style="font-size:1.5rem;margin-bottom:0.3rem;">❓</div>
+                            <div style="font-weight:700;font-size:0.8rem;color:#1e293b;">Tengo una pregunta</div>
+                        </button>
+                        <button type="button" onclick="selectIntent('IMPROVEMENT',this)" id="btn_IMPROVEMENT"
+                            style="padding:1rem 0.5rem;border:2px solid #e2e8f0;border-radius:12px;background:#f8fafc;cursor:pointer;text-align:center;transition:all 0.2s;font-family:inherit;">
+                            <div style="font-size:1.5rem;margin-bottom:0.3rem;">💡</div>
+                            <div style="font-weight:700;font-size:0.8rem;color:#1e293b;">Tengo una propuesta</div>
+                        </button>
+                        <button type="button" onclick="selectIntent('CONTRIBUTION',this)" id="btn_CONTRIBUTION"
+                            style="padding:1rem 0.5rem;border:2px solid #e2e8f0;border-radius:12px;background:#f8fafc;cursor:pointer;text-align:center;transition:all 0.2s;font-family:inherit;">
+                            <div style="font-size:1.5rem;margin-bottom:0.3rem;">⭐</div>
+                            <div style="font-weight:700;font-size:0.8rem;color:#1e293b;">Quiero compartir algo</div>
+                        </button>
+                    </div>
+                    <div id="intentError" style="color:#ef4444;font-size:0.8rem;margin-top:0.5rem;display:none;">Por favor selecciona una opción.</div>
+                </div>
+
+                <?php else: ?>
+                <!-- OTROS ROLES: dropdown con los 7 tipos -->
+                <div class="form-group">
+                    <label class="form-label">Tipo de Hilo <span style="color:#ef4444;">*</span></label>
+                    <select name="threadType" class="form-control" required style="cursor:pointer;appearance:auto;">
+                        <option value="" disabled selected>-- Selecciona una categoría --</option>
+                        <optgroup label="Modelo operativo">
+                            <option value="QUESTION">❓ Pregunta general</option>
+                            <option value="IMPROVEMENT">💡 Propuesta de mejora</option>
+                            <option value="CONTRIBUTION">⭐ Aporte / Compartir</option>
+                        </optgroup>
+                        <optgroup label="Categorías técnicas">
+                            <option value="METHODOLOGY">Duda metodológica</option>
+                            <option value="SUITE_QUESTION">Duda técnica sobre la Suite</option>
+                            <option value="HUB_QUESTION">Duda sobre HubEurosoft</option>
+                            <option value="CLIENT_INSTRUCTION">Instrucción oficial del Cliente</option>
+                            <option value="GOOD_PRACTICE">Buena práctica (pendiente validación)</option>
+                            <option value="GENERAL">Comunicación general / Otros</option>
+                        </optgroup>
                     </select>
                 </div>
+                <?php endif; ?>
+
                 <div class="form-group">
-                    <label class="form-label">Título de la Discusión</label>
-                    <input type="text" name="title" class="form-control" required placeholder="Ej: Dudas sobre el material del Módulo 2" maxlength="150">
+                    <label class="form-label">Título</label>
+                    <input type="text" name="title" class="form-control" required placeholder="Describe brevemente tu tema..." maxlength="150">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Contenido y Mensaje</label>
-                    <textarea name="content" class="form-control" style="height: 150px; resize: vertical;" required placeholder="Describe tu pregunta, idea o comentario a detalle..."></textarea>
+                    <label class="form-label">Detalle</label>
+                    <textarea name="content" class="form-control" style="height: 120px; resize: vertical;" required placeholder="Comparte todos los detalles necesarios..."></textarea>
                 </div>
                 <div style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem;">
                     <button type="button" class="btn" style="background: var(--bg-color); color: var(--text-main);" onclick="document.getElementById('modalCT').classList.remove('active')">Cancelar</button>
+                    <?php if ($isLectorOp): ?>
+                    <button type="submit" class="btn btn-primary" onclick="return validateIntent()"><i class='bx bx-send'></i> Publicar</button>
+                    <?php else: ?>
                     <button type="submit" class="btn btn-primary"><i class='bx bx-send'></i> Publicar Tema</button>
+                    <?php endif; ?>
                 </div>
             </form>
         </div>
     </div>
+    <script>
+    function selectIntent(type, el) {
+        document.getElementById('threadTypeInput').value = type;
+        ['btn_QUESTION','btn_IMPROVEMENT','btn_CONTRIBUTION'].forEach(id => {
+            const b = document.getElementById(id);
+            b.style.border = '2px solid #e2e8f0';
+            b.style.background = '#f8fafc';
+        });
+        el.style.border = '2px solid #FF6A00';
+        el.style.background = '#fff7f0';
+        document.getElementById('intentError').style.display = 'none';
+    }
+    function validateIntent() {
+        const v = document.getElementById('threadTypeInput');
+        if (!v || !v.value) {
+            document.getElementById('intentError').style.display = 'block';
+            return false;
+        }
+        return true;
+    }
+    </script>
 
 <?php 
 // ----------------------------------------------------------------------
@@ -339,16 +478,27 @@ else:
     // Incrementar Vistas solo una vez (simulado en DB)
     $pdo->prepare("UPDATE ForumTopic SET views = views + 1 WHERE id = ?")->execute([$topicId]);
 
-    $stmtTop = $pdo->prepare("SELECT t.*, u.name as authorName, u.email as authorEmail, u.role as authorRole, COALESCE(bu.name, 'Corporativo') as authorBuName FROM ForumTopic t JOIN User u ON t.authorId = u.id LEFT JOIN BusinessUnit bu ON u.businessUnitId = bu.id WHERE t.id = ?");
+    $stmtTop = $pdo->prepare("SELECT t.*, COALESCE(u.name,'[Usuario eliminado]') as authorName, COALESCE(u.email,'') as authorEmail, COALESCE(u.role,'STUDENT') as authorRole, COALESCE(bu.name, 'Corporativo') as authorBuName FROM ForumTopic t LEFT JOIN User u ON t.authorId = u.id LEFT JOIN BusinessUnit bu ON u.businessUnitId = bu.id WHERE t.id = ?");
     $stmtTop->execute([$topicId]);
     $topic = $stmtTop->fetch();
 
     if (!$topic) die("Topic no encontrado");
 
-    $stmtRep = $pdo->prepare("SELECT r.*, u.name as authorName, u.role as authorRole, COALESCE(bu.name, 'Corporativo') as authorBuName,
+    // Paginación de respuestas
+    $rPage    = max(1, (int)($_GET['rpage'] ?? 1));
+    $rPerPage = 25;
+    $rOffset  = ($rPage - 1) * $rPerPage;
+
+    $stmtRCount = $pdo->prepare("SELECT COUNT(id) FROM ForumReply WHERE topicId = ?");
+    $stmtRCount->execute([$topicId]);
+    $rTotal = (int)$stmtRCount->fetchColumn();
+    $rPages = max(1, (int)ceil($rTotal / $rPerPage));
+
+    $stmtRep = $pdo->prepare("SELECT r.*, COALESCE(u.name,'[Usuario eliminado]') as authorName, COALESCE(u.role,'STUDENT') as authorRole, COALESCE(bu.name, 'Corporativo') as authorBuName,
         (SELECT COUNT(id) FROM ForumReplyLike l WHERE l.replyId = r.id AND l.userId = ?) as isLikedByMe,
         (SELECT COUNT(id) FROM ForumReplyHelpfulVote v WHERE v.replyId = r.id AND v.userId = ?) as isVotedHelpfulByMe
-        FROM ForumReply r JOIN User u ON r.authorId = u.id LEFT JOIN BusinessUnit bu ON u.businessUnitId = bu.id WHERE r.topicId = ? ORDER BY r.createdAt ASC");
+        FROM ForumReply r LEFT JOIN User u ON r.authorId = u.id LEFT JOIN BusinessUnit bu ON u.businessUnitId = bu.id WHERE r.topicId = ? ORDER BY r.createdAt ASC
+        LIMIT $rPerPage OFFSET $rOffset");
     $stmtRep->execute([$userId, $userId, $topicId]);
     $rawReplies = $stmtRep->fetchAll(PDO::FETCH_ASSOC);
 
@@ -432,8 +582,8 @@ else:
                     <button onclick="moderateAction('mark_practice', '<?= $topicId ?>')" class="btn" style="background: #fffbeb; color: #d97706; border: 1px solid #fde68a; font-size: 0.8rem; padding: 0.4rem 0.8rem;"><i class='bx bx-check-shield'></i> Aprobar Práctica</button>
                 <?php endif; ?>
                 
-                <?php if ($isAdmin): ?>
-                    <form method="POST" onsubmit="return confirm('¿Borrar TODO EL TEMA completo y eliminar registros?');" style="margin:0;">
+                <?php if ($canModerate): ?>
+                    <form method="POST" onsubmit="return confirm('¿Borrar TODO EL TEMA completo? Esta acción eliminará también todas sus respuestas.');" style="margin:0;">
                         <input type="hidden" name="action" value="delete_topic">
                         <input type="hidden" name="del_id" value="<?= htmlspecialchars($topicId) ?>">
                         <button type="submit" class="btn" style="padding: 0.4rem 0.8rem; background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; font-size: 0.8rem;"><i class='bx bx-trash'></i></button>
@@ -467,8 +617,8 @@ else:
                         <span style="font-size: 0.75rem; color: #9ca3af; margin-left: 0.5rem;"><?= date('d/m/y H:i', strtotime($r['createdAt'])) ?></span>
                     </div>
                     <div style="display: flex; gap: 0.5rem; align-items: center;">
-                        <?php if ($isAdmin): ?>
-                            <form method="POST" onsubmit="return confirm('¿Borrar esta respuesta del usuario y sus sub-respuestas?');" style="margin:0;">
+                        <?php if ($canModerate): ?>
+                            <form method="POST" onsubmit="return confirm('¿Borrar esta respuesta y sus sub-respuestas?');" style="margin:0;">
                                 <input type="hidden" name="action" value="delete_reply">
                                 <input type="hidden" name="del_id" value="<?= htmlspecialchars($r['id']) ?>">
                                 <button type="submit" style="background:none; border:none; cursor:pointer; color:#ef4444; font-size: 1.2rem;"><i class='bx bx-trash'></i></button>
@@ -521,6 +671,25 @@ else:
             </div>
         </div>
     <?php endforeach; ?>
+
+    <?php if ($rPages > 1): ?>
+    <div style="display:flex;justify-content:center;align-items:center;gap:8px;margin:1.5rem 0;flex-wrap:wrap;">
+        <?php
+        $baseReplyUrl = 'index.php?view=forum_topic&forum_id='.urlencode($forumId).'&topic_id='.urlencode($topicId);
+        if ($rPage > 1): ?>
+            <a href="<?= $baseReplyUrl ?>&rpage=<?= $rPage - 1 ?>" style="background:#f3f4f6;color:#374151;padding:7px 14px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.875rem;">← Anterior</a>
+        <?php endif;
+        for ($pi = 1; $pi <= $rPages; $pi++):
+            $isActive = $pi === $rPage;
+            $bgStyle  = $isActive ? 'background:#FF6A00;color:white;' : 'background:#f3f4f6;color:#374151;';
+        ?>
+            <a href="<?= $baseReplyUrl ?>&rpage=<?= $pi ?>" style="<?= $bgStyle ?>padding:7px 14px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.875rem;"><?= $pi ?></a>
+        <?php endfor;
+        if ($rPage < $rPages): ?>
+            <a href="<?= $baseReplyUrl ?>&rpage=<?= $rPage + 1 ?>" style="background:#f3f4f6;color:#374151;padding:7px 14px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.875rem;">Siguiente →</a>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
 
     <!-- DEJAR RESPUESTA -->
     <?php if (!$topic['isLocked']): ?>
