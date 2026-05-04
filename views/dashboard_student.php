@@ -414,7 +414,7 @@ $completedMedallaCount = count(array_filter($medallaItems, fn($i) => $i['complet
                 <div style="background:white;border-radius:1.5rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
                         <h3 style="font-size:0.875rem;font-weight:600;color:#111827;margin:0;">Certificaciones</h3>
-                        <a href="index.php?view=courses" style="width:24px;height:24px;border-radius:50%;background:#f3f4f6;display:flex;align-items:center;justify-content:center;text-decoration:none;color:#4b5563;font-size:0.75rem;">↗</a>
+                        <a href="index.php?view=certificates" style="width:24px;height:24px;border-radius:50%;background:#f3f4f6;display:flex;align-items:center;justify-content:center;text-decoration:none;color:#4b5563;font-size:0.75rem;">↗</a>
                     </div>
                     <?php if (empty($sd['certificates'])): ?>
                         <div style="text-align:center;padding:1rem 0;">
@@ -437,7 +437,7 @@ $completedMedallaCount = count(array_filter($medallaItems, fn($i) => $i['complet
                         <?php endforeach; ?>
                     <?php endif; ?>
                     <!-- CTA button (exact: bg-gray-100 hover:bg-gray-200, rounded-xl) -->
-                    <a href="index.php?view=courses" style="display:block;width:100%;background:#f3f4f6;color:#374151;padding:8px 0;border-radius:12px;font-size:0.875rem;font-weight:600;text-align:center;text-decoration:none;transition:background 0.2s;" onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'">
+                    <a href="index.php?view=certificates" style="display:block;width:100%;background:#f3f4f6;color:#374151;padding:8px 0;border-radius:12px;font-size:0.875rem;font-weight:600;text-align:center;text-decoration:none;transition:background 0.2s;" onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'">
                         Ver todas las certificaciones
                     </a>
                 </div>
