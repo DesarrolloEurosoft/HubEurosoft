@@ -73,7 +73,8 @@ if ($step === 'companies' && $isAdmin):
     $today = date('Y-m-d');
     $stmtC = $pdo->prepare("SELECT c.id, c.name, c.logoPath,
         (SELECT COUNT(id) FROM BusinessUnit WHERE companyId = c.id) as totalBUs,
-        (SELECT COUNT(id) FROM Forum WHERE companyId = c.id) as totalForums,
+        (SELECT IF(COUNT(*) > 0, 1, 0) FROM Forum WHERE companyId = c.id AND businessUnitId IS NULL) as hasCorpLevel,
+        (SELECT COUNT(DISTINCT CONCAT(COALESCE(businessUnitId,'__corp__'),'|',targetRole)) FROM Forum WHERE companyId = c.id) as totalForums,
         (SELECT COUNT(t.id) FROM ForumTopic t JOIN Forum f ON t.forumId = f.id WHERE f.companyId = c.id) as totalTopics,
         (SELECT COUNT(r.id) FROM ForumReply r JOIN ForumTopic t ON r.topicId = t.id JOIN Forum f ON t.forumId = f.id WHERE f.companyId = c.id) as totalReplies,
         (
@@ -111,7 +112,12 @@ if ($step === 'companies' && $isAdmin):
                     </div>
                     <div>
                         <h3 style="font-size: 1.1rem; color: #1e293b; margin: 0 0 0.2rem 0;"><?= htmlspecialchars($c['name']) ?></h3>
-                        <div style="font-size: 0.8rem; color: #64748b; margin-bottom: 0.6rem;"><i class='bx bx-network-chart'></i> <?= (int)$c['totalBUs'] ?> Unidades de Negocio</div>
+                        <div style="font-size: 0.8rem; color: #64748b; margin-bottom: 0.5rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                            <span><i class='bx bx-network-chart'></i> <?= (int)$c['totalBUs'] ?> Unidades de Negocio</span>
+                            <?php if ($c['hasCorpLevel']): ?>
+                            <span style="background:#ede9fe;color:#6d28d9;padding:2px 7px;border-radius:4px;font-size:0.7rem;font-weight:700;"><i class='bx bx-buildings'></i> Corporativo</span>
+                            <?php endif; ?>
+                        </div>
                         <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                             <span style="font-size: 0.7rem; background: #f1f5f9; padding: 3px 6px; border-radius: 4px; color: #475569; font-weight: 600;"><i class='bx bx-conversation'></i> <?= (int)$c['totalForums'] ?> Foros</span>
                             <span style="font-size: 0.7rem; background: #f1f5f9; padding: 3px 6px; border-radius: 4px; color: #475569; font-weight: 600;"><i class='bx bx-list-ul'></i> <?= (int)$c['totalTopics'] ?> Hilos</span>
@@ -222,13 +228,21 @@ elseif ($step === 'forums'):
             $pdo->prepare("INSERT IGNORE INTO Forum (id, companyId, businessUnitId, targetRole, title, description, createdAt, updatedAt) VALUES (?, ?, ?, 'GENERAL', 'Foro General', 'Espacio abierto para debatir, compartir ideas y anuncios.', NOW(), NOW())")
                 ->execute([$fId, $viewCompanyId, $viewBuId]);
 
-            $stmtRoles = $pdo->query("SELECT id, name FROM TrainingRole WHERE name != 'Gestor de Aprendizaje'");
-            while($tr = $stmtRoles->fetch()) {
-                $trFId = generateCuid();
-                $title = "Foro de " . $tr['name'];
-                $desc  = "Espacio privado para perfiles formativos: " . $tr['name'];
-                $pdo->prepare("INSERT IGNORE INTO Forum (id, companyId, businessUnitId, targetRole, title, description, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())")
-                    ->execute([$trFId, $viewCompanyId, $viewBuId, $tr['id'], $title, $desc]);
+            // Los foros de TrainingRole SOLO se crean en contexto de BU.
+            // El nivel Corporativo (businessUnitId IS NULL) únicamente tiene el Foro General.
+            if ($viewBuId) {
+                $stmtRoles = $pdo->query("SELECT id, name FROM TrainingRole WHERE name != 'Gestor de Aprendizaje'");
+                while($tr = $stmtRoles->fetch()) {
+                    $trFId = generateCuid();
+                    $title = "Foro de " . $tr['name'];
+                    // El foro de Lector Operativo tiene descripción abierta: todos pueden responder
+                    $isLoRole = str_contains(strtolower($tr['name']), 'lector') && str_contains(strtolower($tr['name']), 'operativo');
+                    $desc = $isLoRole
+                        ? 'Responde las dudas y propuestas de tu equipo operativo. Todos pueden participar aquí.'
+                        : 'Espacio de colaboración para perfiles formativos: ' . $tr['name'];
+                    $pdo->prepare("INSERT IGNORE INTO Forum (id, companyId, businessUnitId, targetRole, title, description, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())")
+                        ->execute([$trFId, $viewCompanyId, $viewBuId, $tr['id'], $title, $desc]);
+                }
             }
         }
 
@@ -416,17 +430,17 @@ elseif ($step === 'forums'):
                     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;">
                         <button type="button" onclick="setLOIntent('QUESTION',this)" id="lo_btn_Q"
                             style="padding:0.9rem 0.4rem;border:2px solid #e2e8f0;border-radius:12px;background:#f8fafc;cursor:pointer;text-align:center;transition:all 0.2s;font-family:inherit;">
-                            <div style="font-size:1.4rem;margin-bottom:0.25rem;">❓</div>
+                            <div style="font-size:1.6rem;margin-bottom:0.25rem;color:#3b82f6;"><i class='bx bx-help-circle'></i></div>
                             <div style="font-weight:700;font-size:0.75rem;color:#1e293b;">Tengo una pregunta</div>
                         </button>
                         <button type="button" onclick="setLOIntent('IMPROVEMENT',this)" id="lo_btn_I"
                             style="padding:0.9rem 0.4rem;border:2px solid #e2e8f0;border-radius:12px;background:#f8fafc;cursor:pointer;text-align:center;transition:all 0.2s;font-family:inherit;">
-                            <div style="font-size:1.4rem;margin-bottom:0.25rem;">💡</div>
+                            <div style="font-size:1.6rem;margin-bottom:0.25rem;color:#f59e0b;"><i class='bx bx-bulb'></i></div>
                             <div style="font-weight:700;font-size:0.75rem;color:#1e293b;">Tengo una propuesta</div>
                         </button>
                         <button type="button" onclick="setLOIntent('CONTRIBUTION',this)" id="lo_btn_C"
                             style="padding:0.9rem 0.4rem;border:2px solid #e2e8f0;border-radius:12px;background:#f8fafc;cursor:pointer;text-align:center;transition:all 0.2s;font-family:inherit;">
-                            <div style="font-size:1.4rem;margin-bottom:0.25rem;">⭐</div>
+                            <div style="font-size:1.6rem;margin-bottom:0.25rem;color:#FF6A00;"><i class='bx bxs-star'></i></div>
                             <div style="font-weight:700;font-size:0.75rem;color:#1e293b;">Quiero compartir algo</div>
                         </button>
                     </div>
@@ -726,32 +740,39 @@ elseif ($step === 'forums'):
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:1rem;padding:1.25rem 1.5rem 1.5rem;">
             <?php foreach ($forums as $forum):
                 [$icon, $grad] = forumCardStyle($forum['trName'] ?? '', $forum['targetRole']);
+                // Detectar si es el foro LO visto por un usuario no-LO
+                $trNameLower = strtolower($forum['trName'] ?? '');
+                $isLoCard = str_contains($trNameLower, 'lector') && str_contains($trNameLower, 'operativo');
+                $showAsSupport = $isLoCard && !$isLectorOp && !$isAdmin && !$isCoLeader && !$isBuLeader;
             ?>
                 <div class="forum-card-wrap">
                 <a href="index.php?view=forum_topic&forum_id=<?= urlencode($forum['id']) ?>"
                    style="display:block;text-decoration:none;color:inherit;">
-                    <div style="background:#f8fafc;border-radius:16px;padding:1.25rem;border:1px solid #e2e8f0;cursor:pointer;
+                    <div style="background:<?= $showAsSupport ? '#fffbeb' : '#f8fafc' ?>;border-radius:16px;padding:1.25rem;
+                                border:1px solid <?= $showAsSupport ? '#fde68a' : '#e2e8f0' ?>;cursor:pointer;
                                 transition:transform 0.2s,box-shadow 0.2s,border-color 0.2s;height:100%;display:flex;flex-direction:column;"
-                         onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 24px -4px rgba(0,0,0,0.1)';this.style.borderColor='#FF6A00';this.style.background='white';"
-                         onmouseout="this.style.transform='none';this.style.boxShadow='none';this.style.borderColor='#e2e8f0';this.style.background='#f8fafc';">
+                         onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 24px -4px rgba(0,0,0,0.1)';this.style.borderColor='<?= $showAsSupport ? '#f59e0b' : '#FF6A00' ?>';this.style.background='white';"
+                         onmouseout="this.style.transform='none';this.style.boxShadow='none';this.style.borderColor='<?= $showAsSupport ? '#fde68a' : '#e2e8f0' ?>';this.style.background='<?= $showAsSupport ? '#fffbeb' : '#f8fafc' ?>';">
                         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.9rem;">
                             <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(<?= $grad ?>);
                                         display:flex;align-items:center;justify-content:center;flex-shrink:0;
                                         box-shadow:0 4px 8px rgba(0,0,0,0.15);">
-                                <i class='bx <?= $icon ?>' style="font-size:1.3rem;color:white;"></i>
+                                <i class='bx <?= $showAsSupport ? 'bx-chat' : $icon ?>' style="font-size:1.3rem;color:white;"></i>
                             </div>
                             <?php if ($forum['targetRole'] === 'GENERAL'): ?>
                             <span style="background:#eff6ff;color:#2563eb;padding:0.2rem 0.5rem;border-radius:20px;font-size:0.6rem;font-weight:800;text-transform:uppercase;">General</span>
+                            <?php elseif ($showAsSupport): ?>
+                            <span style="background:#fef3c7;color:#92400e;padding:0.2rem 0.5rem;border-radius:20px;font-size:0.6rem;font-weight:800;"><i class='bx bx-group'></i> Apoya</span>
                             <?php endif; ?>
                         </div>
                         <h3 style="font-size:0.95rem;font-weight:800;color:#1e293b;margin:0 0 0.35rem;line-height:1.3;">
-                            <?= htmlspecialchars($forum['title']) ?>
+                            <?= $showAsSupport ? 'Apoya a tu Operador' : htmlspecialchars($forum['title']) ?>
                         </h3>
-                        <p style="font-size:0.78rem;color:#64748b;line-height:1.5;margin:0 0 1rem;
+                        <p style="font-size:0.78rem;color:<?= $showAsSupport ? '#78350f' : '#64748b' ?>;line-height:1.5;margin:0 0 1rem;
                                    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:1;">
-                            <?= htmlspecialchars($forum['description']) ?>
+                            <?= $showAsSupport ? 'Responde las dudas y propuestas de tu equipo. Tu ayuda marca la diferencia.' : htmlspecialchars($forum['description']) ?>
                         </p>
-                        <div style="display:flex;gap:0.75rem;border-top:1px solid #e2e8f0;padding-top:0.75rem;margin-top:auto;">
+                        <div style="display:flex;gap:0.75rem;border-top:1px solid <?= $showAsSupport ? '#fde68a' : '#e2e8f0' ?>;padding-top:0.75rem;margin-top:auto;">
                             <div style="display:flex;align-items:center;gap:0.3rem;color:#64748b;font-size:0.75rem;font-weight:600;">
                                 <i class='bx bx-list-ul' style="color:#3b82f6;"></i>
                                 <span><?= (int)$forum['totalTopics'] ?> hilos</span>

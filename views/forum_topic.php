@@ -98,19 +98,28 @@ if (!$isAdmin) {
     }
     
     // Todos los no administradores revisan sus permisos de creación contra TrainingRole
+    $isLoForum = false;
     if ($forum['targetRole'] !== 'GENERAL') {
+        // Detectar si es el foro específico de Lector Operativo
+        $stmtIsLO = $pdo->prepare("SELECT id FROM TrainingRole WHERE id = ? AND LOWER(name) LIKE '%lector%operativo%'");
+        $stmtIsLO->execute([$forum['targetRole']]);
+        $isLoForum = (bool)$stmtIsLO->fetchColumn();
+
         $stmtTR = $pdo->prepare("SELECT A FROM _TrainingRoleToUser WHERE B = ? AND A = ?");
         $stmtTR->execute([$userId, $forum['targetRole']]);
         if (!$stmtTR->fetch()) {
             $hasPostingRights = false;
-            // Solo los lideres (ambos tipos) obtienen byPass para "LEER" pero no para Escribir Temas Nuevos.
-            if (!$isCoLeader && !$isBuLeader) {
+            // El Foro LO es accesible para toda la BU: pueden leer y responder, pero no crear temas.
+            // Otros foros de rol: solo líderes pueden ver en modo lectura.
+            if (!$isLoForum && !$isCoLeader && !$isBuLeader) {
                 echo "<div class='alert alert-error'>Acceso Denegado: No cuentas con el Perfil Formativo requerido para esta sala.</div>";
                 return;
             }
         }
     }
 }
+// Visitante al foro LO: no es LO, pero tiene acceso para leer y responder
+$isVisitorToLoForum = ($isLoForum ?? false) && !$isLectorOp && !$isAdmin && !$isCoLeader && !$isBuLeader;
 
 // Permisos de moderación por rol y scope
 $canModerate = $isAdmin
@@ -256,6 +265,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 </div>
 
+<?php if ($isVisitorToLoForum): ?>
+<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:0.75rem;">
+    <i class='bx bx-group' style="font-size:1.5rem;color:#92400e;flex-shrink:0;"></i>
+    <div>
+        <div style="font-weight:800;color:#92400e;font-size:0.9rem;">Apoyando al Equipo Operativo</div>
+        <div style="color:#78350f;font-size:0.8rem;margin-top:0.2rem;">Puedes leer y responder a las preguntas y propuestas de tu equipo. Los temas nuevos solo los puede abrir el Lector Operativo.</div>
+    </div>
+</div>
+<?php endif; ?>
 <?php if ($successMsg): ?><div class="alert" style="background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;"><?= htmlspecialchars($successMsg) ?></div><?php endif; ?>
 <?php if ($errorMsg): ?><div class="alert alert-error"><?= htmlspecialchars($errorMsg) ?></div><?php endif; ?>
 
@@ -299,9 +317,15 @@ if ($mode === 'list'):
             <i class='bx bx-edit'></i> Iniciar Nuevo Tema
         </button>
         <?php else: ?>
+            <?php if ($isVisitorToLoForum): ?>
+            <div style="color:#92400e;font-size:0.8rem;background:#fef3c7;padding:0.5rem 1rem;border-radius:20px;border:1px solid #fde68a;font-weight:700;">
+                <i class='bx bx-chat'></i> Responde a tu equipo
+            </div>
+            <?php else: ?>
             <div style="color: #64748b; font-size: 0.8rem; background: #f1f5f9; padding: 0.5rem 1rem; border-radius: 20px;">
                 <i class='bx bx-show'></i> Modo Observador Activado
             </div>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
 
