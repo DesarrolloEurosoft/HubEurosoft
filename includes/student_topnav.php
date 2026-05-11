@@ -50,11 +50,32 @@ if (count($parts) > 1) {
 }
 $initials = mb_strtoupper($initials, 'UTF-8');
 
+// Obtener los perfiles formativos del usuario activo para mostrar en el menú
+$sessionUserId = $_SESSION['user_id'] ?? '';
+$userTrainingRolesStr = '';
+if ($sessionUserId && isset($pdo)) {
+    try {
+        $trStmt = $pdo->prepare("
+            SELECT GROUP_CONCAT(tr.name SEPARATOR ', ') 
+            FROM TrainingRole tr
+            JOIN _TrainingRoleToUser rtu ON rtu.A = tr.id
+            WHERE rtu.B = ?
+        ");
+        $trStmt->execute([$sessionUserId]);
+        $userTrainingRolesStr = $trStmt->fetchColumn() ?: 'Sin perfil asignado';
+    } catch(Exception $e) {
+        $userTrainingRolesStr = 'Desconocido';
+    }
+}
 ?>
 
 <nav class="v3-topnav">
-    <div class="v3-topnav-logo" style="margin-left: -2rem;">
-        <img src="assets/images/logo.png" alt="Hub Eurosoft" style="height: 48px; width: auto; display: block;">
+    <!-- Logo -->
+    <div class="v3-topnav-logo">
+        <a href="index.php" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+            <img src="assets/images/logo.png" alt="Hub Eurosoft" style="height:48px;width:auto;object-fit:contain;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+            <div class="v3-topnav-logo-icon" style="display:none;">HE</div>
+        </a>
     </div>
 
     <!-- Navigation Pills -->
@@ -130,9 +151,14 @@ $initials = mb_strtoupper($initials, 'UTF-8');
             </button>
             <div id="v3-profile-dropdown" style="display:none;position:absolute;top:120%;right:0;width:max-content;min-width:200px;max-width:300px;background:white;border-radius:16px;box-shadow:0 10px 25px rgba(0,0,0,0.12);border:1px solid #f3f4f6;z-index:1000;overflow:hidden;">
                 <div style="padding:0.5rem;">
-                    <a href="index.php?view=settings" style="display:flex;align-items:center;gap:10px;padding:10px 14px;color:#111827;text-decoration:none;font-size:0.875rem;font-weight:600;border-radius:10px;transition:background 0.2s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'">
-                        <i class='bx bx-user-circle' style="font-size:1.2rem;color:#FF6A00;"></i> 
-                        <span style="overflow:hidden;text-overflow:ellipsis;">Perfil <span style="font-weight: 400; color: #6b7280; font-size: 0.8rem;">(<?= htmlspecialchars($userName ?? 'User') ?>)</span></span>
+                    <a href="index.php?view=settings" style="display:flex;flex-direction:column;gap:4px;padding:10px 14px;color:#111827;text-decoration:none;font-size:0.875rem;font-weight:600;border-radius:10px;transition:background 0.2s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'">
+                        <div style="display:flex;align-items:center;gap:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                            <i class='bx bx-user-circle' style="font-size:1.2rem;color:#FF6A00;"></i> 
+                            <span style="overflow:hidden;text-overflow:ellipsis;">Perfil <span style="font-weight: 400; color: #6b7280; font-size: 0.8rem;">(<?= htmlspecialchars($userName ?? 'User') ?>)</span></span>
+                        </div>
+                        <div style="padding-left:28px;font-size:0.75rem;color:#8b5cf6;font-weight:600;display:flex;align-items:center;gap:4px;white-space:normal;line-height:1.2;">
+                            <i class='bx bx-briefcase-alt-2'></i> <?= htmlspecialchars($userTrainingRolesStr) ?>
+                        </div>
                     </a>
                     <div style="height:1px;background:#f3f4f6;margin:4px 0;"></div>
                     <a href="logout.php" style="display:flex;align-items:center;gap:10px;padding:10px 14px;color:#ef4444;text-decoration:none;font-size:0.875rem;font-weight:600;border-radius:10px;transition:background 0.2s;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='transparent'">
@@ -149,7 +175,8 @@ $initials = mb_strtoupper($initials, 'UTF-8');
     <div class="v3-mobile-menu-inner">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
             <div class="v3-topnav-logo">
-                <img src="assets/images/logo.png" alt="Hub Eurosoft" style="height: 48px; width: auto; display: block;">
+                <img src="assets/images/logo.png" alt="Hub Eurosoft" style="height:48px;width:auto;object-fit:contain;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+                <div class="v3-topnav-logo-icon" style="display:none;">HE</div>
             </div>
             <button onclick="toggleMobileMenu()" style="background: none; border: none; font-size: 1.5rem; color: #6b7280; cursor: pointer;">
                 <i class='bx bx-x'></i>

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 if (!defined('DB_HOST') && !isset($pdo)) { die('Direct access not permitted'); }
 
 $userRole = strtoupper($_SESSION['user_role'] ?? '');
@@ -48,21 +48,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $name = trim("$firstName $lastName");
             
             $email = trim($_POST['email'] ?? '');
+            $newId = generateCuid();
+            if (empty($email)) {
+                $email = "{$newId}@hubeurosoft.com";
+            }
+            
             $password = $_POST['password'] ?? '';
             $role = $_POST['role'] ?? 'STUDENT';
             $companyId = !empty($_POST['companyId']) ? $_POST['companyId'] : null;
             $buId = !empty($_POST['businessUnitId']) ? $_POST['businessUnitId'] : null;
             $trainingRoleIds = $_POST['trainingRoleIds'] ?? [];
 
-            if ($firstName && $email && $password) {
+            if ($firstName && $password && $email) {
+                $isDuplicateNick = false;
+                if (!empty($nickname)) {
+                    $nickQuery = "SELECT id FROM User WHERE nickname = ?";
+                    $nickParams = [$nickname];
+                    if ($buId) {
+                        $nickQuery .= " AND businessUnitId = ?";
+                        $nickParams[] = $buId;
+                    } elseif ($companyId) {
+                        $nickQuery .= " AND companyId = ? AND businessUnitId IS NULL";
+                        $nickParams[] = $companyId;
+                    } else {
+                        $nickQuery .= " AND companyId IS NULL AND businessUnitId IS NULL";
+                    }
+                    $stmtNick = $pdo->prepare($nickQuery);
+                    $stmtNick->execute($nickParams);
+                    if ($stmtNick->fetch()) {
+                        $isDuplicateNick = true;
+                    }
+                }
+
                 $stmtCheck = $pdo->prepare("SELECT id FROM User WHERE email = ?");
                 $stmtCheck->execute([$email]);
                 
-                if ($stmtCheck->fetch()) {
+                if ($isDuplicateNick) {
+                    $errorMsg = "El Nickname '$nickname' ya está en uso en esta Unidad/Empresa.";
+                } elseif ($stmtCheck->fetch()) {
                     $errorMsg = "El correo ya está registrado en otro usuario.";
                 } else {
                     $hash = password_hash($password, PASSWORD_BCRYPT);
-                    $newId = generateCuid();
+                    // $newId ya fue generado arriba
                     
                     $stmt = $pdo->prepare("INSERT INTO User (id, name, firstName, lastName, nickname, email, passwordHash, role, companyId, businessUnitId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
                     $stmt->execute([$newId, $name, $firstName, $lastName, $nickname, $email, $hash, $role, $companyId, $buId]);
@@ -90,6 +117,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $name = trim(trim($_POST['name'] ?? '') ?: trim("$firstName $lastName"));
             
             $email = trim($_POST['email'] ?? '');
+            if (empty($email)) {
+                $email = "{$id}@hubeurosoft.com";
+            }
+            
             $password = $_POST['password'] ?? '';
             $role = $_POST['role'] ?? 'STUDENT';
             $companyId = !empty($_POST['companyId']) ? $_POST['companyId'] : null;
@@ -97,9 +128,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $trainingRoleIds = $_POST['trainingRoleIds'] ?? [];
 
             if ($id && $firstName && $email) {
+                $isDuplicateNick = false;
+                if (!empty($nickname)) {
+                    $nickQuery = "SELECT id FROM User WHERE nickname = ? AND id != ?";
+                    $nickParams = [$nickname, $id];
+                    if ($buId) {
+                        $nickQuery .= " AND businessUnitId = ?";
+                        $nickParams[] = $buId;
+                    } elseif ($companyId) {
+                        $nickQuery .= " AND companyId = ? AND businessUnitId IS NULL";
+                        $nickParams[] = $companyId;
+                    } else {
+                        $nickQuery .= " AND companyId IS NULL AND businessUnitId IS NULL";
+                    }
+                    $stmtNick = $pdo->prepare($nickQuery);
+                    $stmtNick->execute($nickParams);
+                    if ($stmtNick->fetch()) {
+                        $isDuplicateNick = true;
+                    }
+                }
+
                 $stmtCheck = $pdo->prepare("SELECT id FROM User WHERE email = ? AND id != ?");
                 $stmtCheck->execute([$email, $id]);
-                if ($stmtCheck->fetch()) {
+                
+                if ($isDuplicateNick) {
+                    $errorMsg = "El Nickname '$nickname' ya está en uso en esta Unidad/Empresa.";
+                } elseif ($stmtCheck->fetch()) {
                     $errorMsg = "El correo ya está en uso.";
                 } else {
                     if ($password) {
@@ -160,6 +214,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $handle = fopen($file, "r");
                 $rowNum = 0;
                 $imported = 0;
+                $skippedRows = []; // Para rastrear errores
                 
                 // Caches para reducir queries en bucle masivo
                 $cCache = []; $bCache = []; $trCache = [];
@@ -184,7 +239,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     $name = trim("$firstName $lastName");
                     
-                    if (!$email || !$firstName) continue;
+                    if (!$firstName) continue; // Email is no longer strictly required
                     
                     $compId = null;
                     if ($companyName) {
@@ -243,9 +298,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     if (!in_array($appRole, ['STUDENT','ADMIN','COMPANY_LEADER','BUSINESS_UNIT_LEADER'])) $appRole = 'STUDENT';
                     
-                    $stmtCheck = $pdo->prepare("SELECT id FROM User WHERE email = ?");
-                    $stmtCheck->execute([$email]);
-                    $ex = $stmtCheck->fetch();
+                    $ex = null;
+                    if (strpos($email, '@hubeurosoft.interno') === false && !empty(trim($data[3] ?? ''))) {
+                        $stmtCheck = $pdo->prepare("SELECT id FROM User WHERE email = ?");
+                        $stmtCheck->execute([$email]);
+                        $ex = $stmtCheck->fetch();
+                    }
+                    
+                    if (!$ex && !empty($nickname)) {
+                        $nickQuery = "SELECT id FROM User WHERE nickname = ?";
+                        $nickParams = [$nickname];
+                        if ($buId) {
+                            $nickQuery .= " AND businessUnitId = ?";
+                            $nickParams[] = $buId;
+                        } elseif ($compId) {
+                            $nickQuery .= " AND companyId = ? AND businessUnitId IS NULL";
+                            $nickParams[] = $compId;
+                        } else {
+                            $nickQuery .= " AND companyId IS NULL AND businessUnitId IS NULL";
+                        }
+                        $stmtNick = $pdo->prepare($nickQuery);
+                        $stmtNick->execute($nickParams);
+                        if ($stmtNick->fetch()) {
+                            $skippedRows[] = "Fila $rowNum: El nickname '$nickname' de $firstName ya está en uso.";
+                            continue;
+                        }
+                    }
                     
                     if ($ex) {
                         $uId = $ex['id'];
@@ -267,6 +345,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     } else {
                         $uId = generateCuid();
+                        if (empty($email)) {
+                            $email = "{$uId}@hubeurosoft.com";
+                        }
                         $realPass = $password ?: '123456';
                         $pdo->prepare("INSERT INTO User (id, name, firstName, lastName, nickname, email, passwordHash, role, companyId, businessUnitId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())")->execute([$uId, $name, $firstName, $lastName, $nickname, $email, password_hash($realPass, PASSWORD_BCRYPT), $appRole, $compId, $buId]);
                         foreach ($finalTrIds as $rId) {
@@ -277,6 +358,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 fclose($handle);
                 $successMsg = "Importación Completada: $imported perfiles procesados con éxito. Se generaron Empresas/Unidades automáticamente de ser necesario.";
+                
+                if (count($skippedRows) > 0) {
+                    $errorMsg = "Se omitieron " . count($skippedRows) . " registro(s) por conflictos de Nickname:<br>" . implode("<br>", array_slice($skippedRows, 0, 10)) . (count($skippedRows) > 10 ? "<br>...y otros más." : "");
+                }
             } else {
                 $errorMsg = "Error al leer el archivo CSV. Asegúrate de que el formato sea válido y no exceda los límites del servidor.";
             }
@@ -396,13 +481,16 @@ try {
             <tbody id="usersTableBody">
                 <?php if (count($users) > 0): ?>
                     <?php foreach ($users as $user): ?>
-                        <tr data-company="<?= htmlspecialchars(strtolower($user['companyName'] ?? '')) ?>" data-bu="<?= htmlspecialchars(strtolower($user['buName'] ?? '')) ?>">
+                        <tr data-company="<?= htmlspecialchars(strtolower($user['companyName'] ?? '')) ?>" data-bu="<?= htmlspecialchars(strtolower($user['buName'] ?? '')) ?>" data-nickname="<?= htmlspecialchars(strtolower($user['nickname'] ?? '')) ?>">
                             <td>
                                 <div style="font-weight: 500; color: var(--text-main);">
                                     <?= htmlspecialchars($user['name'] ?: 'Desconocido') ?>
                                 </div>
                                 <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
                                     <?= htmlspecialchars($user['email']) ?>
+                                    <?php if($user['nickname']): ?>
+                                    <span style="color:#f97316; margin-left:5px;">| <i class='bx bx-user'></i> <?= htmlspecialchars($user['nickname']) ?></span>
+                                    <?php endif; ?>
                                 </div>
                             </td>
                             <td>
@@ -524,11 +612,12 @@ try {
             <div class="two-cols">
                 <div class="form-group">
                     <label class="form-label">Apodo / Nickname (Opcional)</label>
-                    <input type="text" name="nickname" class="form-control">
+                    <input type="text" name="nickname" id="create_nickname" class="form-control" onkeyup="validateNickname('create')">
+                    <span id="create_nick_warning" style="display:none; color:#ef4444; font-size:0.75rem; margin-top:4px;"><i class='bx bx-error-circle'></i> El nickname ya está en uso.</span>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Correo (Login)</label>
-                    <input type="email" name="email" class="form-control" required autocomplete="off">
+                    <label class="form-label">Correo (Login) - Opcional</label>
+                    <input type="email" name="email" class="form-control" autocomplete="off" placeholder="usuario@empresa.com">
                 </div>
             </div>
             
@@ -553,7 +642,7 @@ try {
             <div class="two-cols">
                 <div class="form-group">
                     <label class="form-label">Vincular a un Cliente</label>
-                    <select name="companyId" id="create_company" class="form-control" onchange="updateBUDropdown('create_company', 'create_bu')">
+                    <select name="companyId" id="create_company" class="form-control" onchange="updateBUDropdown('create_company', 'create_bu'); validateNickname('create');">
                         <option value="">-- Sin Cliente (Autónomo) --</option>
                         <?php foreach($allCompanies as $c): ?>
                             <option value="<?= htmlspecialchars($c['id']) ?>"><?= htmlspecialchars($c['name']) ?></option>
@@ -562,7 +651,7 @@ try {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Vincular a Unidad (BU)</label>
-                    <select name="businessUnitId" id="create_bu" class="form-control">
+                    <select name="businessUnitId" id="create_bu" class="form-control" onchange="validateNickname('create');">
                         <option value="">-- Ignorar Rama --</option>
                         <!-- Opciones pobladas vía JavaScript -->
                     </select>
@@ -583,7 +672,7 @@ try {
 
             <div style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem;">
                 <button type="button" class="btn" style="background: var(--bg-color); color: var(--text-main);" onclick="closeModal('modalCreate')">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Registrar Usuario</button>
+                <button type="submit" id="create_submit_btn" class="btn btn-primary">Registrar Usuario</button>
             </div>
         </form>
     </div>
@@ -653,11 +742,12 @@ try {
             <div class="two-cols">
                 <div class="form-group">
                     <label class="form-label">Apodo / Nickname</label>
-                    <input type="text" name="nickname" id="edit_nickname" class="form-control">
+                    <input type="text" name="nickname" id="edit_nickname" class="form-control" onkeyup="validateNickname('edit')">
+                    <span id="edit_nick_warning" style="display:none; color:#ef4444; font-size:0.75rem; margin-top:4px;"><i class='bx bx-error-circle'></i> El nickname ya está en uso.</span>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Correo (Login)</label>
-                    <input type="email" name="email" id="edit_email" class="form-control" required autocomplete="off">
+                    <label class="form-label">Correo (Login) - Opcional</label>
+                    <input type="email" name="email" id="edit_email" class="form-control" autocomplete="off">
                 </div>
             </div>
             
@@ -682,7 +772,7 @@ try {
             <div class="two-cols">
                 <div class="form-group">
                     <label class="form-label">Empresa</label>
-                    <select name="companyId" id="edit_company" class="form-control" onchange="updateBUDropdown('edit_company', 'edit_bu')">
+                    <select name="companyId" id="edit_company" class="form-control" onchange="updateBUDropdown('edit_company', 'edit_bu'); validateNickname('edit');">
                         <option value="">-- Autónomo --</option>
                         <?php foreach($allCompanies as $c): ?>
                             <option value="<?= htmlspecialchars($c['id']) ?>"><?= htmlspecialchars($c['name']) ?></option>
@@ -691,7 +781,7 @@ try {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Rama / Unidad</label>
-                    <select name="businessUnitId" id="edit_bu" class="form-control">
+                    <select name="businessUnitId" id="edit_bu" class="form-control" onchange="validateNickname('edit');">
                         <option value="">-- Ignorar Rama --</option>
                         <!-- Opciones pobladas vía JavaScript -->
                     </select>
@@ -715,7 +805,7 @@ try {
 
             <div style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem;">
                 <button type="button" class="btn" style="background: var(--bg-color); color: var(--text-main);" onclick="closeModal('modalEdit')">Descartar</button>
-                <button type="submit" class="btn btn-primary">Impactar Cambios</button>
+                <button type="submit" id="edit_submit_btn" class="btn btn-primary">Impactar Cambios</button>
             </div>
         </form>
     </div>
@@ -868,11 +958,13 @@ try {
         }
     }
 
-    function openModal(id) { 
+    function openModal(id) {
         if (id === 'modalCreate') {
             document.getElementById('create_company').value = '';
             document.querySelectorAll('#modalCreate input[type=checkbox]').forEach(cb => cb.checked = false);
             updateBUDropdown('create_company', 'create_bu');
+            if(document.getElementById('create_nick_warning')) document.getElementById('create_nick_warning').style.display = 'none';
+            if(document.getElementById('create_submit_btn')) document.getElementById('create_submit_btn').disabled = false;
         }
         let m = document.getElementById(id);
         m.classList.add('active');
@@ -909,6 +1001,9 @@ try {
         checkboxes.forEach(cb => {
             cb.checked = trArr.includes(cb.value);
         });
+        
+        if(document.getElementById('edit_nick_warning')) document.getElementById('edit_nick_warning').style.display = 'none';
+        if(document.getElementById('edit_submit_btn')) document.getElementById('edit_submit_btn').disabled = false;
         
         openModal('modalEdit');
     }
@@ -959,4 +1054,118 @@ try {
             }
         });
     }
+
+    let nickTimeout = null;
+    function validateNickname(mode) {
+        if (nickTimeout) clearTimeout(nickTimeout);
+        
+        let nickEl = document.getElementById(mode + '_nickname');
+        let warnEl = document.getElementById(mode + '_nick_warning');
+        let btnEl = document.getElementById(mode + '_submit_btn');
+        let compEl = document.getElementById(mode + '_company');
+        let buEl = document.getElementById(mode + '_bu');
+        let editId = mode === 'edit' ? document.getElementById('edit_id').value : '';
+        
+        if (!nickEl.value.trim()) {
+            warnEl.style.display = 'none';
+            btnEl.disabled = false;
+            return;
+        }
+
+        nickTimeout = setTimeout(() => {
+            let url = 'api_validate_nickname.php?nickname=' + encodeURIComponent(nickEl.value.trim()) + 
+                      '&companyId=' + encodeURIComponent(compEl.value) + 
+                      '&buId=' + encodeURIComponent(buEl.value);
+            if (editId) url += '&excludeId=' + encodeURIComponent(editId);
+            
+            fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                if (data.taken) {
+                    warnEl.style.display = 'block';
+                    btnEl.disabled = true;
+                } else {
+                    warnEl.style.display = 'none';
+                    btnEl.disabled = false;
+                }
+            })
+            .catch(e => console.error("Error validando nickname", e));
+        }, 500);
+    }
+
+    // Auto-búsqueda y filtros si hay parámetros en la URL
+    document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const searchQuery = urlParams.get('search');
+        const cParam = urlParams.get('c');
+        const uParam = urlParams.get('u');
+        
+        let shouldFilter = false;
+
+        if (cParam) {
+            let filterCompany = document.getElementById('filterCompany');
+            if (filterCompany) {
+                // Find matching option
+                for (let opt of filterCompany.options) {
+                    if (opt.textContent.trim().toLowerCase() === cParam.trim().toLowerCase() || opt.value === cParam.trim().toLowerCase()) {
+                        opt.selected = true;
+                        updateFilterBUDropdown();
+                        shouldFilter = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (uParam) {
+            let filterBU = document.getElementById('filterBU');
+            if (filterBU) {
+                for (let opt of filterBU.options) {
+                    // Extract just the BU name part (before parentheses)
+                    let textName = opt.textContent.split('(')[0].trim().toLowerCase();
+                    if (textName === uParam.trim().toLowerCase() || opt.value === uParam.trim().toLowerCase()) {
+                        opt.selected = true;
+                        shouldFilter = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (searchQuery) {
+            let searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.value = searchQuery;
+                shouldFilter = true;
+            }
+        }
+
+        if (shouldFilter) {
+            filterTable();
+            
+            if (searchQuery) {
+                // Intentar abrir el primer resultado automáticamente
+                setTimeout(() => {
+                    let rows = document.querySelectorAll('#usersTableBody tr');
+                    let foundBtn = null;
+                    for (let row of rows) {
+                        if (row.style.display !== 'none') {
+                            let rowText = row.innerText.toLowerCase();
+                            let nickname = row.getAttribute('data-nickname') || '';
+                            if (rowText.includes(searchQuery.toLowerCase().trim()) || nickname === searchQuery.toLowerCase().trim()) {
+                                let editBtn = row.querySelector('button[onclick^="openEditUser"]');
+                                if (editBtn) {
+                                    foundBtn = editBtn;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (foundBtn) {
+                        foundBtn.click();
+                    }
+                }, 400);
+            }
+        }
+    });
 </script>
