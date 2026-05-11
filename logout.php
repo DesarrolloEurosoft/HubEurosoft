@@ -1,6 +1,15 @@
-<?php
+﻿<?php
 // Iniciar sesión para poder destruirla
 session_start();
+
+// Construir URL de redirección antes de limpiar la sesión
+$redirectUrl = "login.php";
+if (!empty($_SESSION['user_company_name'])) {
+    $redirectUrl .= "?c=" . urlencode($_SESSION['user_company_name']);
+    if (!empty($_SESSION['user_bu_name'])) {
+        $redirectUrl .= "&u=" . urlencode($_SESSION['user_bu_name']);
+    }
+}
 
 // Vaciar todas las variables de sesión
 $_SESSION = array();
@@ -14,10 +23,13 @@ if (ini_get("session.use_cookies")) {
     );
 }
 
+// Borrar cookie Recordarme
+setcookie('hubeurosoft_remember', '', time() - 3600, "/");
+
 // Finalmente, destruir la sesión
 session_destroy();
 
-// Redirigir al inicio de sesión
-header("Location: login.php");
+// Redirigir al inicio de sesión personalizado
+header("Location: " . $redirectUrl);
 exit;
 ?>

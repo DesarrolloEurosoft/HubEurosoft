@@ -10,6 +10,18 @@ $uRow      = $stmtCmp->fetch(PDO::FETCH_ASSOC);
 $companyId = $uRow ? $uRow['companyId'] : null;
 $buId      = $uRow ? $uRow['businessUnitId'] : null;
 
+// ── Detectar si el usuario es Lector Operativo ───────────────────────────────
+$isLectorOp = false;
+if ($userId) {
+    $stmtLO = $pdo->prepare("SELECT 1 FROM TrainingRole tr JOIN _TrainingRoleToUser rtu ON rtu.A = tr.id WHERE rtu.B = ? AND LOWER(tr.name) LIKE '%lector%operativo%' LIMIT 1");
+    $stmtLO->execute([$userId]);
+    $isLectorOp = (bool)$stmtLO->fetchColumn();
+}
+// Etiquetas de contexto según rol
+$rankingTitle   = $isLectorOp ? 'Ranking · Lectores Operativos' : 'Ranking';
+$tabGeneralLbl  = $isLectorOp ? 'Mi Empresa' : 'General';
+$tabTeamLbl     = $isLectorOp ? 'Mi Unidad'  : null; // null = usar $buName
+
 $buName = 'Mi Equipo';
 if ($buId) {
     $stmtBN = $pdo->prepare("SELECT name FROM BusinessUnit WHERE id = ?");
@@ -76,6 +88,36 @@ if ($companyId) {
 }
 if (empty($usersTeam)) { $usersTeam = $usersGeneral; }
 
+// ── Para Lectores Operativos: reemplazar queries con filtro por TrainingRole ──
+if ($isLectorOp) {
+    $loJoin = "JOIN _TrainingRoleToUser rtu ON rtu.B = u.id JOIN TrainingRole tr ON rtu.A = tr.id AND LOWER(tr.name) LIKE '%lector%operativo%'";
+    if ($companyId && $buId) {
+        $s = $pdo->prepare("
+            SELECT u.id, u.name, u.firstName, u.lastName, u.totalPoints, u.image,
+                   COALESCE(bu.name,'Sin Unidad') as buName,
+                   (SELECT COUNT(cp.id) FROM CourseProgress cp WHERE cp.userId=u.id AND cp.isCompleted=1) as coursesCompleted
+            FROM User u LEFT JOIN BusinessUnit bu ON u.businessUnitId=bu.id
+            $loJoin
+            WHERE u.role='STUDENT' AND u.companyId=? AND u.businessUnitId=?
+            ORDER BY u.totalPoints DESC LIMIT 50");
+        $s->execute([$companyId, $buId]);
+        $usersTeam = $s->fetchAll(PDO::FETCH_ASSOC);
+    }
+    if ($companyId) {
+        $s = $pdo->prepare("
+            SELECT u.id, u.name, u.firstName, u.lastName, u.totalPoints, u.image,
+                   COALESCE(bu.name,'Sin Unidad') as buName,
+                   (SELECT COUNT(cp.id) FROM CourseProgress cp WHERE cp.userId=u.id AND cp.isCompleted=1) as coursesCompleted
+            FROM User u LEFT JOIN BusinessUnit bu ON u.businessUnitId=bu.id
+            $loJoin
+            WHERE u.role='STUDENT' AND u.companyId=?
+            ORDER BY u.totalPoints DESC LIMIT 50");
+        $s->execute([$companyId]);
+        $usersGeneral = $s->fetchAll(PDO::FETCH_ASSOC);
+    }
+    if (empty($usersTeam)) { $usersTeam = $usersGeneral; }
+}
+
 // ── 4. Tops ───────────────────────────────────────────────────────────────────
 $top5General = array_slice($usersGeneral, 0, 5);
 $top3Team    = array_slice($usersTeam,    0, 3);
@@ -108,7 +150,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
 ?>
 
 <div style="max-width:1920px;margin:0 auto;padding:1rem 1.5rem 2rem;">
-<h1 style="font-size:1.75rem;font-weight:700;color:#111827;margin:0 0 1.5rem 0;">Ranking</h1>
+<h1 style="font-size:1.75rem;font-weight:700;color:#111827;margin:0 0 1.5rem 0;"><?= htmlspecialchars($rankingTitle) ?></h1>
 
 <!-- ════════════════════════════════════════════════════════════════════════════
      PODIO — carrusel interno: slide 0 = Top 3 Mi Equipo | slide 1 = Top 5 General
@@ -335,11 +377,11 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
     <div style="display:flex;align-items:center;gap:8px;background:#f3f4f6;border-radius:999px;padding:5px;">
         <button id="tabGeneral" onclick="switchRankTab('general')"
             style="flex:1;padding:10px 20px;border-radius:999px;font-size:0.875rem;font-weight:600;border:none;cursor:pointer;transition:all 0.2s;background:white;color:#111827;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
-            <i class='bx bx-globe' style="margin-right:4px;vertical-align:-2px;"></i>General
+            <i class='bx bx-globe' style="margin-right:4px;vertical-align:-2px;"></i><?= htmlspecialchars($tabGeneralLbl) ?>
         </button>
         <button id="tabTeam" onclick="switchRankTab('team')"
             style="flex:1;padding:10px 20px;border-radius:999px;font-size:0.875rem;font-weight:600;border:none;cursor:pointer;transition:all 0.2s;background:transparent;color:#6b7280;">
-            <i class='bx bx-group' style="margin-right:4px;vertical-align:-2px;"></i><?= htmlspecialchars($buName) ?>
+            <i class='bx bx-group' style="margin-right:4px;vertical-align:-2px;"></i><?= htmlspecialchars($tabTeamLbl ?? $buName) ?>
         </button>
     </div>
 </div>
