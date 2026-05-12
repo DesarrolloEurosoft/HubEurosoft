@@ -1056,9 +1056,15 @@
     /* -- Ranking podium: reducir padding para que los avatares no se corten -- */
     .lo-podium-card { padding: 1rem 0.5rem !important; }
 
+    /* -- Podium interior: scroll horizontal si los avatares aun no caben -- */
+    .lo-podium-inner { overflow-x: auto; padding-bottom: 0.5rem; }
+
     /* -- Ranking rows: alinear items arriba cuando el nombre es largo -- */
     .rank-row-general > div,
     .rank-row-team > div { align-items: flex-start !important; gap: 0.75rem !important; }
+
+    /* -- Ranking sub-info (cursos + unidad): compacto en móvil -- */
+    .rank-sub-info { gap: 0.35rem !important; flex-wrap: wrap; }
 
     /* -- Cursos: filter tabs compactos -- */
     .v3-filter { padding: 7px 12px !important; font-size: 0.8rem !important; }
