@@ -190,14 +190,14 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
             $p3ranks = [2,1,3];
             $p3h     = [2=>'144px',1=>'192px',3=>'112px'];
         ?>
-            <div style="display:flex;align-items:flex-end;justify-content:center;gap:1.5rem;max-width:700px;margin:0 auto;">
+            <div class="lo-pf" style="display:flex;align-items:flex-end;justify-content:center;gap:1.5rem;max-width:700px;margin:0 auto;">
             <?php foreach($p3order as $pi=>$pu):
                 $rk=$p3ranks[$pi]; $isF=($rk===1);
                 $sz=$isF?'96px':'80px'; $nm=getDisplayNameR($pu); ?>
                 <div style="flex:1;max-width:200px;">
                     <div style="text-align:center;margin-bottom:0.75rem;">
                         <div style="position:relative;display:inline-block;margin-bottom:10px;">
-                            <div style="width:<?=$sz?>;height:<?=$sz?>;border-radius:50%;border:4px solid <?=$borderColors[$rk]?>;overflow:hidden;background:#374151;display:flex;align-items:center;justify-content:center;margin:0 auto;<?=$isF?'box-shadow:0 10px 15px rgba(234,179,8,0.5);':''?>">
+                            <div class="lo-pa" style="width:<?=$sz?>;height:<?=$sz?>;border-radius:50%;border:4px solid <?=$borderColors[$rk]?>;overflow:hidden;background:#374151;display:flex;align-items:center;justify-content:center;margin:0 auto;<?=$isF?'box-shadow:0 10px 15px rgba(234,179,8,0.5);':''?>">
                                 <?php if(!empty($pu['image'])):?><img src="<?=htmlspecialchars($pu['image']) ?>" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;font-size:1.5rem;font-weight:700;color:white;"><?=strtoupper(mb_substr($nm,0,1))?></span><?php else:?><span style="font-size:1.5rem;font-weight:700;color:white;"><?=strtoupper(mb_substr($nm,0,1))?></span><?php endif;?>
                             </div>
                             <div style="position:absolute;top:-14px;left:-14px;z-index:20;width:<?=$isF?'54px':'46px'?>;height:<?=$isF?'54px':'46px'?>;pointer-events:none;">
@@ -229,7 +229,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
             $p5h       = [1=>'192px',2=>'148px',3=>'112px',4=>'80px',5=>'56px'];
             $p5margin  = [1=>'0px',2=>'48px',3=>'80px',4=>'112px',5=>'136px']; // margin-bottom para alinear bases
         ?>
-            <div style="display:flex;align-items:flex-end;justify-content:center;gap:1rem;max-width:800px;margin:0 auto;">
+            <div class="lo-pf" style="display:flex;align-items:flex-end;justify-content:center;gap:1rem;max-width:800px;margin:0 auto;">
             <?php foreach($p5indices as $pos => $arrIdx):
                 if (!isset($top5General[$arrIdx])) continue;
                 $tu   = $top5General[$arrIdx];
@@ -242,7 +242,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
                 <div style="flex:1;max-width:<?=$isF?'160px':($rk<=3?'140px':'120px')?>;<?=$isMe?'filter:drop-shadow(0 0 8px rgba(255,106,0,0.6));':''?>">
                     <div style="text-align:center;margin-bottom:0.6rem;">
                         <div style="position:relative;display:inline-block;margin-bottom:8px;">
-                            <div style="width:<?=$sz?>;height:<?=$sz?>;border-radius:50%;border:3px solid <?=$borderColors[$rk]?>;overflow:hidden;background:#374151;display:flex;align-items:center;justify-content:center;margin:0 auto;<?=$isF?'box-shadow:0 8px 20px rgba(234,179,8,0.5);':''?>">
+                            <div class="lo-pa" style="width:<?=$sz?>;height:<?=$sz?>;border-radius:50%;border:3px solid <?=$borderColors[$rk]?>;overflow:hidden;background:#374151;display:flex;align-items:center;justify-content:center;margin:0 auto;<?=$isF?'box-shadow:0 8px 20px rgba(234,179,8,0.5);':''?>">
                                 <?php if(!empty($tu['image'])):?><img src="<?=htmlspecialchars($tu['image']) ?>" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;font-size:1.1rem;font-weight:700;color:white;"><?=strtoupper(mb_substr($tNm,0,1))?></span><?php else:?><span style="font-size:1.1rem;font-weight:700;color:white;"><?=strtoupper(mb_substr($tNm,0,1))?></span><?php endif;?>
                             </div>
                             <!-- Badge de posición -->

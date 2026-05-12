@@ -1053,11 +1053,15 @@
     /* -- Cursos: 3 cols → 2 cols en tablet -- */
     #v3CourseContainer { grid-template-columns: repeat(2, 1fr) !important; }
 
-    /* -- Ranking podium: reducir padding para que los avatares no se corten -- */
-    .lo-podium-card { padding: 1rem 0.5rem !important; }
+    /* -- Ranking podium: reducir gap y quitar max-width de columnas de jugador -- */
+    .lo-pf { gap: 0.35rem !important; }
+    .lo-pf > div { max-width: none !important; min-width: 0 !important; }
 
-    /* -- Podium interior: scroll horizontal si los avatares aun no caben -- */
-    .lo-podium-inner { overflow-x: auto; padding-bottom: 0.5rem; }
+    /* -- Avatares podium 3 jugadores: 56px caben en ~100px por columna -- */
+    #podiumSlide0 .lo-pa { width: 56px !important; height: 56px !important; }
+
+    /* -- Avatares podium 5 jugadores: 40px caben en ~57px por columna -- */
+    #podiumSlide1 .lo-pa { width: 40px !important; height: 40px !important; }
 
     /* -- Ranking rows: alinear items arriba cuando el nombre es largo -- */
     .rank-row-general > div,
