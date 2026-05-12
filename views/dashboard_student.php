@@ -492,7 +492,7 @@ if ($isLectorOp) {
         <div style="display:flex;flex-direction:column;gap:1.25rem;min-width:0;">
 
             <!-- Top Row: Racha + Forum card (2 cols, forum spans 2) -->
-            <div style="display:grid;grid-template-columns:1fr 2fr;gap:1.25rem;">
+            <div style="display:grid;grid-template-columns:<?= $isLectorOp ? '1fr 2fr' : 'repeat(3,1fr)' ?>;gap:1.25rem;">
 
                 <?php if ($isLectorOp):
                 $streakVal = $sd['streak'];
@@ -533,8 +533,8 @@ if ($isLectorOp) {
                     </div>
                 </div>
                 <?php else: ?>
-                <!-- hidden for non-LO — placeholder so grid still works -->
-                <div style="display:none;">
+                <!-- Progreso Semanal — solo para no-LO -->
+                <div style="background:white;border-radius:1.5rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
                         <h3 style="font-size:0.875rem;font-weight:600;color:#111827;margin:0;">Progreso Semanal</h3>
                     </div>
