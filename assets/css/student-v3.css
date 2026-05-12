@@ -1053,6 +1053,16 @@
     /* -- Cursos: 3 cols → 2 cols en tablet -- */
     #v3CourseContainer { grid-template-columns: repeat(2, 1fr) !important; }
 
+    /* -- Ranking podium: reducir padding para que los avatares no se corten -- */
+    .lo-podium-card { padding: 1rem 0.5rem !important; }
+
+    /* -- Ranking rows: alinear items arriba cuando el nombre es largo -- */
+    .rank-row-general > div,
+    .rank-row-team > div { align-items: flex-start !important; gap: 0.75rem !important; }
+
+    /* -- Cursos: filter tabs compactos -- */
+    .v3-filter { padding: 7px 12px !important; font-size: 0.8rem !important; }
+
     /* -- Notif dropdown: ancho completo en móvil -- */
     #v3-notif-dropdown { width: calc(100vw - 2rem); right: -4rem; }
 

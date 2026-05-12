@@ -16,7 +16,7 @@
     
     <!-- Estilos -->
     <link rel="stylesheet" href="assets/css/style.css?v=3.5">
-    <link rel="stylesheet" href="assets/css/student-v3.css?v=3.1">
+    <link rel="stylesheet" href="assets/css/student-v3.css?v=3.2">
     
     <!-- Iconos Boxicons -->
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>

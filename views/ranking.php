@@ -156,7 +156,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
      PODIO — carrusel interno: slide 0 = Top 3 Mi Equipo | slide 1 = Top 5 General
      Ambos slides usan el mismo layout de columnas para altura uniforme.
 ════════════════════════════════════════════════════════════════════════════ -->
-<div style="background:linear-gradient(135deg,#111827,#1f2937,#111827);border-radius:1rem;padding:2rem;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);border:1px solid #374151;margin-bottom:1.5rem;position:relative;overflow:hidden;">
+<div class="lo-podium-card" style="background:linear-gradient(135deg,#111827,#1f2937,#111827);border-radius:1rem;padding:2rem;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);border:1px solid #374151;margin-bottom:1.5rem;position:relative;overflow:hidden;">
     <div style="position:absolute;top:0;right:0;width:256px;height:256px;background:rgba(255,106,0,0.1);border-radius:50%;transform:translate(50%,-50%);filter:blur(48px);pointer-events:none;"></div>
     <div style="position:absolute;bottom:0;left:0;width:256px;height:256px;background:rgba(234,179,8,0.1);border-radius:50%;transform:translate(-50%,50%);filter:blur(48px);pointer-events:none;"></div>
     <div style="position:relative;z-index:10;">
