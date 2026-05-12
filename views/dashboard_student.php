@@ -285,7 +285,7 @@ if ($isLectorOp) {
     </div>
 
     <!-- ═══ BENTO GRID 3-9 layout (exact from page.tsx:287) ═══ -->
-    <div style="display:grid;grid-template-columns:3fr 9fr;gap:1.25rem;">
+    <div class="lo-dashboard-grid">
 
         <!-- === LEFT COLUMN (3 cols) === -->
         <div style="display:flex;flex-direction:column;gap:1.25rem;">
@@ -578,7 +578,7 @@ if ($isLectorOp) {
                         <h3 style="font-size:0.875rem;font-weight:700;color:#111827;margin:0;">Mi Actividad en el Foro</h3>
                     </div>
                     <!-- 3 KPIs -->
-                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;margin-bottom:1.25rem;">
+                    <div class="lo-forum-kpis">
                         <div style="background:#fff7ed;border-radius:1rem;padding:0.875rem;text-align:center;">
                             <p style="font-size:1.875rem;font-weight:800;color:#111827;margin:0;line-height:1;"><?= $loForumTopics ?></p>
                             <p style="font-size:0.7rem;color:#6b7280;margin:5px 0 0;font-weight:600;">Temas publicados</p>

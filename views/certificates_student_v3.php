@@ -38,7 +38,7 @@ if ($userRoleCheck === 'STUDENT') {
 
 <?php if ($isLO): ?>
 <!-- ══════════ VISTA LECTOR OPERATIVO ══════════ -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.5rem;">
+<div class="lo-cert-grid">
 
     <!-- Card 1: Mis diplomas -->
     <div style="background:linear-gradient(135deg,#111827,#1f2937);border-radius:1rem;padding:1.5rem;border:1px solid #374151;color:white;position:relative;overflow:hidden;">

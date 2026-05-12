@@ -103,7 +103,7 @@ if ($sessionUserId && isset($pdo)) {
         <!-- Mobile hamburger -->
         <button class="v3-topnav-btn v3-topnav-btn-light v3-mobile-toggle" 
                 onclick="toggleMobileMenu()" 
-                style="display: none;">
+                aria-label="Menú">
             <i class='bx bx-menu'></i>
         </button>
 
