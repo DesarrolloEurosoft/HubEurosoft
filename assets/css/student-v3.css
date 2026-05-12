@@ -920,3 +920,184 @@
 
 /* Nav pill click effect */
 .v3-nav-pill:active { transform: scale(0.96); }
+
+/* ═══════════════════════════════════════════════════════════
+   MOBILE MENU OVERLAY
+   ═══════════════════════════════════════════════════════════ */
+.v3-mobile-menu {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 9998;
+    backdrop-filter: blur(2px);
+}
+.v3-mobile-menu.active { display: flex; }
+
+.v3-mobile-menu-inner {
+    width: 280px;
+    max-width: 85vw;
+    height: 100%;
+    background: white;
+    padding: 1.5rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    overflow-y: auto;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+    animation: v3-slideInLeft 0.25s cubic-bezier(0.4,0,0.2,1);
+}
+
+@keyframes v3-slideInLeft {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(0); }
+}
+
+.v3-mobile-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.8rem 1rem;
+    border-radius: 12px;
+    text-decoration: none;
+    color: #374151;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: background 0.2s, color 0.2s;
+}
+.v3-mobile-nav-item:hover { background: #fff7ed; color: #FF6A00; }
+.v3-mobile-nav-item.active { background: #fff7ed; color: #FF6A00; font-weight: 700; }
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE LAYOUT CLASSES
+   ═══════════════════════════════════════════════════════════ */
+
+/* Dashboard main bento grid (left 3fr + right 9fr) */
+.lo-dashboard-grid {
+    display: grid;
+    grid-template-columns: 3fr 9fr;
+    gap: 1.25rem;
+}
+
+/* Top row LO: Racha (1fr) + Foro (2fr) */
+.lo-top-row {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 1.25rem;
+}
+
+/* Top row Estudiante: 3 cards iguales */
+.lo-3col-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+}
+
+/* Generic 2-column grid (Medallas+Logros, Ruta+Continúa, Ranking stats) */
+.lo-2col-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+}
+
+/* LO Forum KPIs (3 columnas iguales) */
+.lo-forum-kpis {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+/* LO Certificates cards (2 columnas) */
+.lo-cert-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+/* Forum Topic: contenido + sidebar */
+.ft-main-grid {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 1.5rem;
+    align-items: start;
+}
+
+/* ─── BREAKPOINT: Tablet / Móvil ≤ 768px ─── */
+@media (max-width: 768px) {
+
+    /* -- Topnav -- */
+    .v3-nav-pills { display: none !important; }
+    .v3-mobile-toggle { display: flex !important; }
+    .v3-topnav { padding: 0.75rem 1rem; }
+
+    /* -- Dashboard main grid: columnas apiladas -- */
+    .lo-dashboard-grid { grid-template-columns: 1fr; }
+
+    /* -- Top row LO: apilado (Racha encima de Foro) -- */
+    .lo-top-row { grid-template-columns: 1fr; }
+
+    /* -- Top row Estudiante: 1 col -- */
+    .lo-3col-grid { grid-template-columns: 1fr; }
+
+    /* -- Grids 2 columnas: apilados -- */
+    .lo-2col-grid { grid-template-columns: 1fr; }
+
+    /* -- LO Cert grid: apilado -- */
+    .lo-cert-grid { grid-template-columns: 1fr; }
+
+    /* -- Forum Topic: sidebar va debajo del contenido -- */
+    .ft-main-grid { grid-template-columns: 1fr; }
+
+    /* -- Cursos: 3 cols → 2 cols en tablet -- */
+    #v3CourseContainer { grid-template-columns: repeat(2, 1fr) !important; }
+
+    /* -- Ranking podium: reducir gap y quitar max-width de columnas de jugador -- */
+    .lo-pf { gap: 0.35rem !important; }
+    .lo-pf > div { max-width: none !important; min-width: 0 !important; }
+
+    /* -- Avatares podium 3 jugadores: 56px caben en ~100px por columna -- */
+    #podiumSlide0 .lo-pa { width: 56px !important; height: 56px !important; }
+
+    /* -- Avatares podium 5 jugadores: 40px caben en ~57px por columna -- */
+    #podiumSlide1 .lo-pa { width: 40px !important; height: 40px !important; }
+
+    /* -- Ranking rows: alinear items arriba cuando el nombre es largo -- */
+    .rank-row-general > div,
+    .rank-row-team > div { align-items: flex-start !important; gap: 0.75rem !important; }
+
+    /* -- Ranking sub-info (cursos + unidad): compacto en móvil -- */
+    .rank-sub-info { gap: 0.35rem !important; flex-wrap: wrap; }
+
+    /* -- Cursos: filter tabs compactos -- */
+    .v3-filter { padding: 7px 12px !important; font-size: 0.8rem !important; }
+
+    /* -- Notif dropdown: ancho completo en móvil -- */
+    #v3-notif-dropdown { width: calc(100vw - 2rem); right: -4rem; }
+
+    /* -- Perfil: colapsar 380px+1fr → columna única -- */
+    #profileGrid { grid-template-columns: 1fr !important; }
+
+    /* -- Padding general de páginas -- */
+    .v3-page-content { padding: 0.75rem 1rem 4rem !important; }
+}
+
+/* ─── BREAKPOINT: Móvil pequeño ≤ 480px ─── */
+@media (max-width: 480px) {
+
+    /* LO Forum KPIs: 3 cols → apilado */
+    .lo-forum-kpis { grid-template-columns: 1fr; }
+
+    /* Cursos: 2 cols → 1 col */
+    #v3CourseContainer { grid-template-columns: 1fr !important; }
+
+    /* Logo más compacto */
+    .v3-topnav-logo img { height: 36px !important; }
+
+    /* Ajuste de fuentes en números grandes */
+    .lo-kpi-num { font-size: 1.5rem !important; }
+
+    /* -- Perfil: campos Nombre/Apellido y Contraseñas → columna única -- */
+    #profileNamesGrid, #profilePassGrid { grid-template-columns: 1fr !important; }
+}

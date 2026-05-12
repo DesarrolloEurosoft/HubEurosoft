@@ -269,6 +269,31 @@ $isNextLocked = !$isLessonCompleted;
     .btn-primary:disabled { background: #cbd5e1; color: #64748b; cursor: not-allowed; }
     .pulse-btn { animation: pulse 2s infinite; }
     @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+    /* ── RESPONSIVE: móvil ≤ 768px ── */
+    @media (max-width: 768px) {
+        .lesson-layout {
+            flex-direction: column;
+            gap: 1rem;
+            padding: 0.75rem;
+        }
+        .lesson-sidebar {
+            width: 100% !important;
+            position: static !important;
+            height: auto !important;
+            max-height: 50vh;
+            border-radius: 1rem;
+            overflow-y: auto;
+        }
+        .lesson-main {
+            padding: 1.25rem;
+            border-radius: 1rem;
+        }
+        .l-title { font-size: 1.25rem; margin-bottom: 1rem; }
+        .l-main-inner { max-width: 100%; }
+        .l-tracker { flex-wrap: wrap; gap: 0.5rem; }
+        .l-tracker-bar-bg { flex-basis: 100%; margin: 0; }
+    }
 </style>
 
 <div class="lesson-layout">

@@ -34,7 +34,7 @@ function getStatusCfg($status) {
                 <button class="v3-filter" data-filter="in-progress" onclick="v3Filter(this)">En Progreso (<?= $inProgressCourses ?>)</button>
                 <button class="v3-filter" data-filter="locked" onclick="v3Filter(this)">Bloqueados (<?= count(array_filter($allCoursesFlat, fn($c)=>$c['status']==='locked')) ?>)</button>
             </div>
-            <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:280px;max-width:28rem;">
+            <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;max-width:28rem;">
                 <div style="position:relative;flex:1;">
                     <i class='bx bx-search' style="position:absolute;left:16px;top:50%;transform:translateY(-50%);color:#9ca3af;"></i>
                     <input type="text" id="v3SearchInput" placeholder="Buscar cursos..." oninput="v3ApplyFilters()" style="width:100%;padding:10px 16px 10px 44px;background:#f9fafb;border-radius:999px;border:1px solid #e5e7eb;color:#111827;font-size:0.875rem;outline:none;" onfocus="this.style.boxShadow='0 0 0 2px #FF6A00';this.style.borderColor='#FF6A00'" onblur="this.style.boxShadow='none';this.style.borderColor='#e5e7eb'">
@@ -112,7 +112,7 @@ function getStatusCfg($status) {
     <?php endif; ?>
 
     <!-- Hero: 2 Column Grid -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.5rem;">
+    <div class="lo-2col-grid" style="margin-bottom:1.5rem;">
 
         <!-- Left: Dark Card -->
         <div style="background:linear-gradient(135deg,#111827,#1f2937,#111827);border-radius:1rem;padding:1.5rem;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);border:1px solid #374151;color:white;position:relative;overflow:hidden;">

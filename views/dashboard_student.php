@@ -285,7 +285,7 @@ if ($isLectorOp) {
     </div>
 
     <!-- ═══ BENTO GRID 3-9 layout (exact from page.tsx:287) ═══ -->
-    <div style="display:grid;grid-template-columns:3fr 9fr;gap:1.25rem;">
+    <div class="lo-dashboard-grid">
 
         <!-- === LEFT COLUMN (3 cols) === -->
         <div style="display:flex;flex-direction:column;gap:1.25rem;">
@@ -492,7 +492,7 @@ if ($isLectorOp) {
         <div style="display:flex;flex-direction:column;gap:1.25rem;min-width:0;">
 
             <!-- Top Row: Racha + Forum card (2 cols, forum spans 2) -->
-            <div style="display:grid;grid-template-columns:1fr 2fr;gap:1.25rem;">
+            <div class="<?= $isLectorOp ? 'lo-top-row' : 'lo-3col-grid' ?>">
 
                 <?php if ($isLectorOp):
                 $streakVal = $sd['streak'];
@@ -533,8 +533,8 @@ if ($isLectorOp) {
                     </div>
                 </div>
                 <?php else: ?>
-                <!-- hidden for non-LO — placeholder so grid still works -->
-                <div style="display:none;">
+                <!-- Progreso Semanal — solo para no-LO -->
+                <div style="background:white;border-radius:1.5rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
                         <h3 style="font-size:0.875rem;font-weight:600;color:#111827;margin:0;">Progreso Semanal</h3>
                     </div>
@@ -578,7 +578,7 @@ if ($isLectorOp) {
                         <h3 style="font-size:0.875rem;font-weight:700;color:#111827;margin:0;">Mi Actividad en el Foro</h3>
                     </div>
                     <!-- 3 KPIs -->
-                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;margin-bottom:1.25rem;">
+                    <div class="lo-forum-kpis">
                         <div style="background:#fff7ed;border-radius:1rem;padding:0.875rem;text-align:center;">
                             <p style="font-size:1.875rem;font-weight:800;color:#111827;margin:0;line-height:1;"><?= $loForumTopics ?></p>
                             <p style="font-size:0.7rem;color:#6b7280;margin:5px 0 0;font-weight:600;">Temas publicados</p>
@@ -828,7 +828,7 @@ if ($isLectorOp) {
                 $loShowcase2  = array_slice($loEarned2, 0, 3);
                 $cLO = ['bg-indigo-500'=>'linear-gradient(135deg,#6366f1,#818cf8)','bg-rose-500'=>'linear-gradient(135deg,#f43f5e,#fb7185)','bg-sky-500'=>'linear-gradient(135deg,#0ea5e9,#38bdf8)','bg-yellow-500'=>'linear-gradient(135deg,#eab308,#facc15)','bg-amber-500'=>'linear-gradient(135deg,#f59e0b,#fbbf24)','bg-green-500'=>'linear-gradient(135deg,#22c55e,#4ade80)','bg-purple-500'=>'linear-gradient(135deg,#a855f7,#c084fc)','bg-orange-500'=>'linear-gradient(135deg,#f97316,#fb923c)','bg-red-500'=>'linear-gradient(135deg,#ef4444,#f87171)','bg-teal-500'=>'linear-gradient(135deg,#14b8a6,#2dd4bf)','bg-blue-500'=>'linear-gradient(135deg,#3b82f6,#60a5fa)','bg-pink-500'=>'linear-gradient(135deg,#ec4899,#f472b6)'];
             ?>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;">
+            <div class="lo-2col-grid">
             <!-- Medallas Card -->
             <div style="background:white;border-radius:1.5rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">

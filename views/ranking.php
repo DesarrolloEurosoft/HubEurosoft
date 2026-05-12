@@ -156,10 +156,10 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
      PODIO — carrusel interno: slide 0 = Top 3 Mi Equipo | slide 1 = Top 5 General
      Ambos slides usan el mismo layout de columnas para altura uniforme.
 ════════════════════════════════════════════════════════════════════════════ -->
-<div style="background:linear-gradient(135deg,#111827,#1f2937,#111827);border-radius:1rem;padding:2rem;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);border:1px solid #374151;margin-bottom:1.5rem;position:relative;overflow:hidden;">
+<div class="lo-podium-card" style="background:linear-gradient(135deg,#111827,#1f2937,#111827);border-radius:1rem;padding:2rem;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);border:1px solid #374151;margin-bottom:1.5rem;position:relative;overflow:hidden;">
     <div style="position:absolute;top:0;right:0;width:256px;height:256px;background:rgba(255,106,0,0.1);border-radius:50%;transform:translate(50%,-50%);filter:blur(48px);pointer-events:none;"></div>
     <div style="position:absolute;bottom:0;left:0;width:256px;height:256px;background:rgba(234,179,8,0.1);border-radius:50%;transform:translate(-50%,50%);filter:blur(48px);pointer-events:none;"></div>
-    <div style="position:relative;z-index:10;">
+    <div class="lo-podium-inner" style="position:relative;z-index:10;">
 
         <!-- Header navegación -->
         <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:0.75rem;">
@@ -190,14 +190,14 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
             $p3ranks = [2,1,3];
             $p3h     = [2=>'144px',1=>'192px',3=>'112px'];
         ?>
-            <div style="display:flex;align-items:flex-end;justify-content:center;gap:1.5rem;max-width:700px;margin:0 auto;">
+            <div class="lo-pf" style="display:flex;align-items:flex-end;justify-content:center;gap:1.5rem;max-width:700px;margin:0 auto;">
             <?php foreach($p3order as $pi=>$pu):
                 $rk=$p3ranks[$pi]; $isF=($rk===1);
                 $sz=$isF?'96px':'80px'; $nm=getDisplayNameR($pu); ?>
                 <div style="flex:1;max-width:200px;">
                     <div style="text-align:center;margin-bottom:0.75rem;">
                         <div style="position:relative;display:inline-block;margin-bottom:10px;">
-                            <div style="width:<?=$sz?>;height:<?=$sz?>;border-radius:50%;border:4px solid <?=$borderColors[$rk]?>;overflow:hidden;background:#374151;display:flex;align-items:center;justify-content:center;margin:0 auto;<?=$isF?'box-shadow:0 10px 15px rgba(234,179,8,0.5);':''?>">
+                            <div class="lo-pa" style="width:<?=$sz?>;height:<?=$sz?>;border-radius:50%;border:4px solid <?=$borderColors[$rk]?>;overflow:hidden;background:#374151;display:flex;align-items:center;justify-content:center;margin:0 auto;<?=$isF?'box-shadow:0 10px 15px rgba(234,179,8,0.5);':''?>">
                                 <?php if(!empty($pu['image'])):?><img src="<?=htmlspecialchars($pu['image']) ?>" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;font-size:1.5rem;font-weight:700;color:white;"><?=strtoupper(mb_substr($nm,0,1))?></span><?php else:?><span style="font-size:1.5rem;font-weight:700;color:white;"><?=strtoupper(mb_substr($nm,0,1))?></span><?php endif;?>
                             </div>
                             <div style="position:absolute;top:-14px;left:-14px;z-index:20;width:<?=$isF?'54px':'46px'?>;height:<?=$isF?'54px':'46px'?>;pointer-events:none;">
@@ -229,7 +229,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
             $p5h       = [1=>'192px',2=>'148px',3=>'112px',4=>'80px',5=>'56px'];
             $p5margin  = [1=>'0px',2=>'48px',3=>'80px',4=>'112px',5=>'136px']; // margin-bottom para alinear bases
         ?>
-            <div style="display:flex;align-items:flex-end;justify-content:center;gap:1rem;max-width:800px;margin:0 auto;">
+            <div class="lo-pf" style="display:flex;align-items:flex-end;justify-content:center;gap:1rem;max-width:800px;margin:0 auto;">
             <?php foreach($p5indices as $pos => $arrIdx):
                 if (!isset($top5General[$arrIdx])) continue;
                 $tu   = $top5General[$arrIdx];
@@ -242,7 +242,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
                 <div style="flex:1;max-width:<?=$isF?'160px':($rk<=3?'140px':'120px')?>;<?=$isMe?'filter:drop-shadow(0 0 8px rgba(255,106,0,0.6));':''?>">
                     <div style="text-align:center;margin-bottom:0.6rem;">
                         <div style="position:relative;display:inline-block;margin-bottom:8px;">
-                            <div style="width:<?=$sz?>;height:<?=$sz?>;border-radius:50%;border:3px solid <?=$borderColors[$rk]?>;overflow:hidden;background:#374151;display:flex;align-items:center;justify-content:center;margin:0 auto;<?=$isF?'box-shadow:0 8px 20px rgba(234,179,8,0.5);':''?>">
+                            <div class="lo-pa" style="width:<?=$sz?>;height:<?=$sz?>;border-radius:50%;border:3px solid <?=$borderColors[$rk]?>;overflow:hidden;background:#374151;display:flex;align-items:center;justify-content:center;margin:0 auto;<?=$isF?'box-shadow:0 8px 20px rgba(234,179,8,0.5);':''?>">
                                 <?php if(!empty($tu['image'])):?><img src="<?=htmlspecialchars($tu['image']) ?>" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;font-size:1.1rem;font-weight:700;color:white;"><?=strtoupper(mb_substr($tNm,0,1))?></span><?php else:?><span style="font-size:1.1rem;font-weight:700;color:white;"><?=strtoupper(mb_substr($tNm,0,1))?></span><?php endif;?>
                             </div>
                             <!-- Badge de posición -->
@@ -272,7 +272,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
      STATS FILA 1
      [Tu Posición: doble columna BU + General]  [Últimos Puntos]
 ════════════════════════════════════════════════════════════════════════════ -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem;">
+<div class="lo-2col-grid" style="margin-bottom:1.25rem;">
 
     <!-- Tu Posición: muestra ambos rangos simultáneamente -->
     <div style="background:linear-gradient(135deg,#111827,#1f2937,#111827);border-radius:1rem;padding:1.5rem;border:1px solid #374151;color:white;position:relative;overflow:hidden;">
@@ -351,7 +351,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
 <!-- ════════════════════════════════════════════════════════════════════════════
      STATS FILA 2: Participantes + Para Top 3  (se actualizan con el tab)
 ════════════════════════════════════════════════════════════════════════════ -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.5rem;">
+<div class="lo-2col-grid" style="margin-bottom:1.5rem;">
     <div style="background:white;border-radius:1rem;padding:1.5rem;border:1px solid #f3f4f6;">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem;">
             <div style="width:48px;height:48px;border-radius:1rem;background:linear-gradient(135deg,#3b82f6,#2563eb);display:flex;align-items:center;justify-content:center;"><i class='bx bx-group' style="color:white;font-size:1.5rem;"></i></div>
@@ -405,7 +405,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
                 <div style="width:44px;height:44px;border-radius:50%;background:#111827;display:flex;align-items:center;justify-content:center;color:white;overflow:hidden;flex-shrink:0;border:2px solid #e5e7eb;"><?php if(!empty($ru['image'])):?><img src="<?=htmlspecialchars($ru['image']) ?>" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;font-size:1rem;font-weight:700;"><?=strtoupper(mb_substr($dn,0,1))?></span><?php else:?><span style="font-size:1rem;font-weight:700;"><?=strtoupper(mb_substr($dn,0,1))?></span><?php endif;?></div>
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;"><h3 style="font-weight:700;color:#111827;margin:0;font-size:0.95rem;"><?=htmlspecialchars($dn)?></h3><?php if($isMe):?><span style="padding:2px 8px;background:#FF6A00;color:white;font-size:0.7rem;font-weight:700;border-radius:999px;">Tú</span><?php endif;?></div>
-                    <div style="display:flex;align-items:center;gap:1rem;font-size:0.8rem;color:#6b7280;"><span style="display:flex;align-items:center;gap:3px;"><i class='bx bx-star'></i><?=$ru['coursesCompleted']?> cursos</span><span><?=htmlspecialchars($ru['buName']??'Sin Unidad')?></span></div>
+                    <div class="rank-sub-info" style="display:flex;align-items:center;gap:1rem;font-size:0.8rem;color:#6b7280;"><span style="display:flex;align-items:center;gap:3px;"><i class='bx bx-star'></i><?=$ru['coursesCompleted']?> cursos</span><span><?=htmlspecialchars($ru['buName']??'Sin Unidad')?></span></div>
                 </div>
                 <div style="text-align:right;flex-shrink:0;"><p style="font-size:1.4rem;font-weight:700;color:#111827;margin:0;"><?=number_format((int)$ru['totalPoints'])?></p><p style="font-size:0.7rem;color:#6b7280;margin:0;">puntos</p></div>
                 <div style="width:30px;flex-shrink:0;"><div style="width:30px;height:30px;border-radius:50%;background:<?=$isMe?'#dcfce7':'#f3f4f6'?>;display:flex;align-items:center;justify-content:center;"><?php if($isMe):?><i class='bx bx-chevron-up' style="color:#16a34a;"></i><?php else:?><span style="color:#9ca3af;font-size:0.85rem;">-</span><?php endif;?></div></div>
@@ -434,7 +434,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
                 <div style="width:44px;height:44px;border-radius:50%;background:#111827;display:flex;align-items:center;justify-content:center;color:white;overflow:hidden;flex-shrink:0;border:2px solid #e5e7eb;"><?php if(!empty($ru['image'])):?><img src="<?=htmlspecialchars($ru['image']) ?>" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;font-size:1rem;font-weight:700;"><?=strtoupper(mb_substr($dn,0,1))?></span><?php else:?><span style="font-size:1rem;font-weight:700;"><?=strtoupper(mb_substr($dn,0,1))?></span><?php endif;?></div>
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;"><h3 style="font-weight:700;color:#111827;margin:0;font-size:0.95rem;"><?=htmlspecialchars($dn)?></h3><?php if($isMe):?><span style="padding:2px 8px;background:#FF6A00;color:white;font-size:0.7rem;font-weight:700;border-radius:999px;">Tú</span><?php endif;?></div>
-                    <div style="display:flex;align-items:center;gap:3px;font-size:0.8rem;color:#6b7280;"><i class='bx bx-star'></i><?=$ru['coursesCompleted']?> cursos</div>
+                    <div class="rank-sub-info" style="display:flex;align-items:center;gap:1rem;font-size:0.8rem;color:#6b7280;"><i class='bx bx-star'></i><?=$ru['coursesCompleted']?> cursos</div>
                 </div>
                 <div style="text-align:right;flex-shrink:0;"><p style="font-size:1.4rem;font-weight:700;color:#111827;margin:0;"><?=number_format((int)$ru['totalPoints'])?></p><p style="font-size:0.7rem;color:#6b7280;margin:0;">puntos</p></div>
                 <div style="width:30px;flex-shrink:0;"><div style="width:30px;height:30px;border-radius:50%;background:<?=$isMe?'#dcfce7':'#f3f4f6'?>;display:flex;align-items:center;justify-content:center;"><?php if($isMe):?><i class='bx bx-chevron-up' style="color:#16a34a;"></i><?php else:?><span style="color:#9ca3af;font-size:0.85rem;">-</span><?php endif;?></div></div>
