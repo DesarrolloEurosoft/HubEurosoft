@@ -84,7 +84,7 @@ if ($userRoleCheck === 'STUDENT') {
 <form method="POST">
 <input type="hidden" name="profile_action" value="update_profile">
 
-<div style="display:grid;grid-template-columns:380px 1fr;gap:1.5rem;">
+<div id="profileGrid" style="display:grid;grid-template-columns:380px 1fr;gap:1.5rem;">
 <!-- LEFT: Avatar Card -->
 <div>
     <div style="background:white;border-radius:1rem;padding:2rem;border:1px solid #f3f4f6;text-align:center;margin-bottom:1.5rem;">
@@ -118,7 +118,7 @@ if ($userRoleCheck === 'STUDENT') {
         <div style="width:40px;height:40px;border-radius:12px;background:rgba(255,106,0,0.1);display:flex;align-items:center;justify-content:center;"><i class='bx bx-user' style="color:#FF6A00;font-size:1.25rem;"></i></div>
         <h3 style="font-size:1.125rem;font-weight:700;color:#111827;margin:0;">Datos Personales</h3>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+    <div id="profileNamesGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
         <div><label style="display:block;font-size:0.75rem;font-weight:700;color:#FF6A00;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Nombre</label><input type="text" name="firstName" value="<?=htmlspecialchars($firstName)?>" style="width:100%;padding:12px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;font-size:0.875rem;color:#111827;outline:none;" onfocus="this.style.borderColor='#FF6A00'" onblur="this.style.borderColor='#e5e7eb'"></div>
         <div><label style="display:block;font-size:0.75rem;font-weight:700;color:#FF6A00;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Apellido</label><input type="text" name="lastName" value="<?=htmlspecialchars($lastName)?>" style="width:100%;padding:12px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;font-size:0.875rem;color:#111827;outline:none;" onfocus="this.style.borderColor='#FF6A00'" onblur="this.style.borderColor='#e5e7eb'"></div>
     </div>
@@ -132,7 +132,7 @@ if ($userRoleCheck === 'STUDENT') {
         <h3 style="font-size:1.125rem;font-weight:700;color:#111827;margin:0;">Seguridad</h3>
     </div>
     <div style="margin-bottom:1.5rem;"><label style="display:block;font-size:0.75rem;font-weight:700;color:#FF6A00;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Contrase&ntilde;a Actual</label><input type="password" name="currentPassword" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" style="width:100%;padding:12px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;font-size:0.875rem;color:#111827;outline:none;" onfocus="this.style.borderColor='#FF6A00'" onblur="this.style.borderColor='#e5e7eb'"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+    <div id="profilePassGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
         <div><label style="display:block;font-size:0.75rem;font-weight:700;color:#FF6A00;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Nueva Contrase&ntilde;a</label><input type="password" name="newPassword" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" style="width:100%;padding:12px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;font-size:0.875rem;color:#111827;outline:none;" onfocus="this.style.borderColor='#FF6A00'" onblur="this.style.borderColor='#e5e7eb'"></div>
         <div><label style="display:block;font-size:0.75rem;font-weight:700;color:#FF6A00;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Confirmar Nueva</label><input type="password" name="confirmPassword" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" style="width:100%;padding:12px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;font-size:0.875rem;color:#111827;outline:none;" onfocus="this.style.borderColor='#FF6A00'" onblur="this.style.borderColor='#e5e7eb'"></div>
     </div>

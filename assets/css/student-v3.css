@@ -1076,6 +1076,9 @@
     /* -- Notif dropdown: ancho completo en móvil -- */
     #v3-notif-dropdown { width: calc(100vw - 2rem); right: -4rem; }
 
+    /* -- Perfil: colapsar 380px+1fr → columna única -- */
+    #profileGrid { grid-template-columns: 1fr !important; }
+
     /* -- Padding general de páginas -- */
     .v3-page-content { padding: 0.75rem 1rem 4rem !important; }
 }
@@ -1094,4 +1097,7 @@
 
     /* Ajuste de fuentes en números grandes */
     .lo-kpi-num { font-size: 1.5rem !important; }
+
+    /* -- Perfil: campos Nombre/Apellido y Contraseñas → columna única -- */
+    #profileNamesGrid, #profilePassGrid { grid-template-columns: 1fr !important; }
 }
