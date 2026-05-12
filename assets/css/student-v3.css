@@ -979,6 +979,27 @@
     gap: 1.25rem;
 }
 
+/* Top row LO: Racha (1fr) + Foro (2fr) */
+.lo-top-row {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 1.25rem;
+}
+
+/* Top row Estudiante: 3 cards iguales */
+.lo-3col-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+}
+
+/* Generic 2-column grid (Medallas+Logros, Ruta+Continúa, Ranking stats) */
+.lo-2col-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+}
+
 /* LO Forum KPIs (3 columnas iguales) */
 .lo-forum-kpis {
     display: grid;
@@ -995,6 +1016,14 @@
     margin-bottom: 1.5rem;
 }
 
+/* Forum Topic: contenido + sidebar */
+.ft-main-grid {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 1.5rem;
+    align-items: start;
+}
+
 /* ─── BREAKPOINT: Tablet / Móvil ≤ 768px ─── */
 @media (max-width: 768px) {
 
@@ -1004,12 +1033,25 @@
     .v3-topnav { padding: 0.75rem 1rem; }
 
     /* -- Dashboard main grid: columnas apiladas -- */
-    .lo-dashboard-grid {
-        grid-template-columns: 1fr;
-    }
+    .lo-dashboard-grid { grid-template-columns: 1fr; }
+
+    /* -- Top row LO: apilado (Racha encima de Foro) -- */
+    .lo-top-row { grid-template-columns: 1fr; }
+
+    /* -- Top row Estudiante: 1 col -- */
+    .lo-3col-grid { grid-template-columns: 1fr; }
+
+    /* -- Grids 2 columnas: apilados -- */
+    .lo-2col-grid { grid-template-columns: 1fr; }
 
     /* -- LO Cert grid: apilado -- */
     .lo-cert-grid { grid-template-columns: 1fr; }
+
+    /* -- Forum Topic: sidebar va debajo del contenido -- */
+    .ft-main-grid { grid-template-columns: 1fr; }
+
+    /* -- Cursos: 3 cols → 2 cols en tablet -- */
+    #v3CourseContainer { grid-template-columns: repeat(2, 1fr) !important; }
 
     /* -- Notif dropdown: ancho completo en móvil -- */
     #v3-notif-dropdown { width: calc(100vw - 2rem); right: -4rem; }
@@ -1023,6 +1065,9 @@
 
     /* LO Forum KPIs: 3 cols → apilado */
     .lo-forum-kpis { grid-template-columns: 1fr; }
+
+    /* Cursos: 2 cols → 1 col */
+    #v3CourseContainer { grid-template-columns: 1fr !important; }
 
     /* Logo más compacto */
     .v3-topnav-logo img { height: 36px !important; }

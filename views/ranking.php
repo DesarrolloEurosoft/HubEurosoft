@@ -272,7 +272,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
      STATS FILA 1
      [Tu Posición: doble columna BU + General]  [Últimos Puntos]
 ════════════════════════════════════════════════════════════════════════════ -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem;">
+<div class="lo-2col-grid" style="margin-bottom:1.25rem;">
 
     <!-- Tu Posición: muestra ambos rangos simultáneamente -->
     <div style="background:linear-gradient(135deg,#111827,#1f2937,#111827);border-radius:1rem;padding:1.5rem;border:1px solid #374151;color:white;position:relative;overflow:hidden;">
@@ -351,7 +351,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
 <!-- ════════════════════════════════════════════════════════════════════════════
      STATS FILA 2: Participantes + Para Top 3  (se actualizan con el tab)
 ════════════════════════════════════════════════════════════════════════════ -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.5rem;">
+<div class="lo-2col-grid" style="margin-bottom:1.5rem;">
     <div style="background:white;border-radius:1rem;padding:1.5rem;border:1px solid #f3f4f6;">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem;">
             <div style="width:48px;height:48px;border-radius:1rem;background:linear-gradient(135deg,#3b82f6,#2563eb);display:flex;align-items:center;justify-content:center;"><i class='bx bx-group' style="color:white;font-size:1.5rem;"></i></div>

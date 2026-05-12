@@ -112,7 +112,7 @@ function getStatusCfg($status) {
     <?php endif; ?>
 
     <!-- Hero: 2 Column Grid -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.5rem;">
+    <div class="lo-2col-grid" style="margin-bottom:1.5rem;">
 
         <!-- Left: Dark Card -->
         <div style="background:linear-gradient(135deg,#111827,#1f2937,#111827);border-radius:1rem;padding:1.5rem;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);border:1px solid #374151;color:white;position:relative;overflow:hidden;">
