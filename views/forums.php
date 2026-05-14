@@ -795,7 +795,7 @@ elseif ($step === 'forums'):
                     continue;
                 }
                 // Mostrar como card de apoyo (ambar) si es Modelador o Líder viendo el foro LO
-                $showAsSupport = $isLoCard && !$isLectorOp && ($isModelador || $isCoLeader || $isBuLeader);
+                $showAsSupport = $isLoCard && !$isLectorOp && ($isModelador || $isCoLeader || $isBuLeader || $isAdmin);
             ?>
                 <div class="forum-card-wrap">
                 <a href="index.php?view=forum_topic&forum_id=<?= urlencode($forum['id']) ?>"
