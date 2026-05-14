@@ -404,7 +404,7 @@ if ($mode === 'list'):
                 <i class='bx bx-edit-alt'></i> Nueva Discusión
             </button>
             <?php elseif ($isVisitorToLoForum): ?>
-            <div style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:white;font-size:0.8rem;font-weight:700;padding:0.5rem 1rem;border-radius:999px;"><i class='bx bx-chat'></i> Responde a tu equipo</div>
+            <button onclick="(function(){var el=document.getElementById('topicsContainer');if(el){el.scrollIntoView({behavior:'smooth',block:'start'});el.style.outline='2px solid rgba(16,185,129,0.55)';el.style.borderRadius='12px';setTimeout(function(){el.style.outline='2px solid rgba(16,185,129,0)';setTimeout(function(){el.style.outline='';el.style.borderRadius='';},500);},700);}else{window.scrollBy({top:350,behavior:'smooth'});};})()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:white;font-size:0.8rem;font-weight:700;padding:0.5rem 1rem;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:0.4rem;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.28)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'"><i class='bx bx-chat'></i> Responde a tu equipo</button>
             <?php else: ?>
             <div style="background:rgba(0,0,0,0.15);color:rgba(255,255,255,0.7);font-size:0.8rem;font-weight:600;padding:0.5rem 1rem;border-radius:999px;"><i class='bx bx-show'></i> Modo Observador</div>
             <?php endif; ?>
@@ -1021,6 +1021,23 @@ else:
             box.style.display = 'block';
         } else {
             box.style.display = 'none';
+        }
+    }
+    function scrollToTopics() {
+        const el = document.getElementById('topicsContainer') || document.getElementById('topicSearch');
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Highlight momentáneo para guiar al visitor
+        const target = document.getElementById('topicsContainer');
+        if (target) {
+            target.style.transition = 'outline 0s';
+            target.style.outline = '2px solid rgba(16,185,129,0.6)';
+            target.style.borderRadius = '12px';
+            setTimeout(() => {
+                target.style.transition = 'outline 0.8s ease';
+                target.style.outline = '2px solid rgba(16,185,129,0)';
+                setTimeout(() => { target.style.outline = ''; target.style.borderRadius = ''; }, 900);
+            }, 600);
         }
     }
     </script>
