@@ -53,16 +53,29 @@ $initials = mb_strtoupper($initials, 'UTF-8');
 // Obtener los perfiles formativos del usuario activo para mostrar en el menú
 $sessionUserId = $_SESSION['user_id'] ?? '';
 $userTrainingRolesStr = '';
+$isTopLectorOp = false;
 if ($sessionUserId && isset($pdo)) {
     try {
         $trStmt = $pdo->prepare("
-            SELECT GROUP_CONCAT(tr.name SEPARATOR ', ') 
+            SELECT tr.name 
             FROM TrainingRole tr
             JOIN _TrainingRoleToUser rtu ON rtu.A = tr.id
             WHERE rtu.B = ?
         ");
         $trStmt->execute([$sessionUserId]);
-        $userTrainingRolesStr = $trStmt->fetchColumn() ?: 'Sin perfil asignado';
+        $trRoles = $trStmt->fetchAll(PDO::FETCH_COLUMN);
+        
+        if ($trRoles) {
+            $userTrainingRolesStr = implode(', ', $trRoles);
+            foreach ($trRoles as $rol) {
+                if (stripos($rol, 'lector') !== false && stripos($rol, 'operativo') !== false) {
+                    $isTopLectorOp = true;
+                    break;
+                }
+            }
+        } else {
+            $userTrainingRolesStr = 'Sin perfil asignado';
+        }
     } catch(Exception $e) {
         $userTrainingRolesStr = 'Desconocido';
     }
@@ -214,8 +227,10 @@ if ($sessionUserId && isset($pdo)) {
 </div>
 
 <style>
+    .v3-mobile-toggle { display: none !important; }
     @media (max-width: 1023px) {
         .v3-mobile-toggle { display: flex !important; }
+        .v3-nav-pills { display: none !important; }
     }
 </style>
 
@@ -378,3 +393,46 @@ function openV3NotifHistory() {
 fetchV3Notifs();
 setInterval(fetchV3Notifs, 45000);
 </script>
+
+<?php if ($isTopLectorOp): ?>
+<!-- NAVEGACIÓN INFERIOR (Solo Lector Operativo) -->
+<nav class="v3-bottom-nav">
+    <a href="index.php?view=dashboard" class="v3-bnav-item <?= ($currentView === 'dashboard') ? 'active' : '' ?>">
+        <i class='bx bx-home-circle'></i>
+        <span>Avance</span>
+    </a>
+    <a href="index.php?view=courses" class="v3-bnav-item <?= ($currentView === 'courses' || $currentView === 'lesson') ? 'active' : '' ?>">
+        <i class='bx bx-book-open'></i>
+        <span>Cursos</span>
+    </a>
+    <a href="index.php?view=forums" class="v3-bnav-item <?= ($currentView === 'forums' || $currentView === 'forum_topic') ? 'active' : '' ?>">
+        <i class='bx bx-chat'></i>
+        <span>Foro</span>
+    </a>
+    <a href="index.php?view=certificates" class="v3-bnav-item <?= ($currentView === 'certificates') ? 'active' : '' ?>">
+        <i class='bx bx-award'></i>
+        <span>Logros</span>
+    </a>
+    <a href="index.php?view=ranking" class="v3-bnav-item <?= ($currentView === 'ranking') ? 'active' : '' ?>">
+        <i class='bx bx-trophy'></i>
+        <span>Puntajes</span>
+    </a>
+</nav>
+<style>
+    /* Default padding for mobile */
+    body { padding-bottom: 75px !important; }
+
+    /* Hide the navigation pills and hamburger on mobile for Lector Operativo, but KEEP the topnav for notifications */
+    @media (max-width: 1023px) {
+        .v3-nav-pills { display: none !important; }
+        .v3-mobile-toggle { display: none !important; }
+        .v3-mobile-menu { display: none !important; }
+    }
+
+    /* Hide the bottom nav and remove padding on PC for Lector Operativo */
+    @media (min-width: 1024px) {
+        .v3-bottom-nav { display: none !important; }
+        body { padding-bottom: 0 !important; }
+    }
+</style>
+<?php endif; ?>

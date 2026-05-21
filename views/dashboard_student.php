@@ -215,6 +215,16 @@ if ($isLectorOp) {
 ?>
 
 <!-- ═══ WELCOME SECTION (exact from page.tsx:238-284) ═══ -->
+<style>
+    .dash-kpi-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+    .dash-bento-grid { display: grid; grid-template-columns: 3fr 9fr; gap: 1.25rem; }
+    .dash-top-row-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+    
+    @media (max-width: 1023px) {
+        .dash-bento-grid { grid-template-columns: 1fr; }
+        .dash-top-row-grid { grid-template-columns: 1fr; }
+    }
+</style>
 <div style="max-width:1920px;margin:0 auto;padding:1rem 1.5rem;">
 
     <!-- Welcome heading -->
@@ -251,7 +261,7 @@ if ($isLectorOp) {
 
             <?php if (!$isLectorOp): ?>
             <!-- KPI Cards -->
-            <div style="display:grid;grid-template-columns:repeat(3,auto);gap:0.75rem;">
+            <div class="dash-kpi-grid">
                 <div style="background:white;border-radius:1rem;padding:0.75rem 1rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
                     <div style="display:flex;align-items:center;gap:0.75rem;">
                         <i class='bx bxs-hot' style="color:#FF6A00;font-size:1.25rem;"></i>
@@ -285,7 +295,7 @@ if ($isLectorOp) {
     </div>
 
     <!-- ═══ BENTO GRID 3-9 layout (exact from page.tsx:287) ═══ -->
-    <div class="lo-dashboard-grid">
+    <div class="dash-bento-grid">
 
         <!-- === LEFT COLUMN (3 cols) === -->
         <div style="display:flex;flex-direction:column;gap:1.25rem;">

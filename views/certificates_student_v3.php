@@ -33,12 +33,12 @@ if ($userRoleCheck === 'STUDENT') {
     $threeMonthsAgo = date('Y-m-d', strtotime('-3 months'));
 ?>
 
-<div style="max-width:1920px;margin:0 auto;padding:1rem 1.5rem 2rem;">
+<div class="cert-wrapper" style="max-width:1920px;margin:0 auto;padding:1rem 1.5rem 2rem;">
 <h1 style="font-size:1.75rem;font-weight:700;color:#111827;margin:0 0 1.5rem 0;">Certificados</h1>
 
 <?php if ($isLO): ?>
 <!-- ══════════ VISTA LECTOR OPERATIVO ══════════ -->
-<div class="lo-cert-grid">
+<div class="lo-cert-grid cert-stats-order">
 
     <!-- Card 1: Mis diplomas -->
     <div style="background:linear-gradient(135deg,#111827,#1f2937);border-radius:1rem;padding:1.5rem;border:1px solid #374151;color:white;position:relative;overflow:hidden;">
@@ -95,7 +95,7 @@ if ($userRoleCheck === 'STUDENT') {
 
 <?php else: ?>
 <!-- ══════════ VISTA ESTUDIANTE REGULAR ══════════ -->
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1.25rem;margin-bottom:1.5rem;">
+<div class="cert-grid-4 cert-stats-order" style="margin-bottom:1.5rem;">
     <!-- Total -->
     <div style="background:linear-gradient(135deg,#111827,#1f2937,#111827);border-radius:1rem;padding:1.5rem;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);border:1px solid #374151;color:white;position:relative;overflow:hidden;">
         <div style="position:absolute;top:0;right:0;width:96px;height:96px;background:rgba(255,106,0,0.1);border-radius:50%;transform:translate(50%,-50%);filter:blur(40px);"></div>
@@ -160,7 +160,7 @@ if ($userRoleCheck === 'STUDENT') {
     <?php endif; ?>
 </div>
 <?php else: ?>
-<div id="cert-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;">
+<div id="cert-grid" class="cert-grid-3 cert-list-order">
 <?php foreach ($certificates as $idx => $cert):
     $isRecent = strtotime($cert['issuedAt']) >= strtotime($threeMonthsAgo);
     $courseId  = $cert['courseId'] ?? '';
@@ -252,6 +252,23 @@ function filterCerts(type, btn) {
     if (empty) empty.style.display = visible === 0 ? 'block' : 'none';
 }
 </script>
+<style>
+.lo-cert-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+.cert-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; }
+.cert-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+.cert-wrapper { display: flex; flex-direction: column; }
+.cert-stats-order { order: 1; }
+.cert-list-order { order: 2; width: 100%; }
+
+@media (max-width: 1023px) {
+    .lo-cert-grid { grid-template-columns: 1fr; gap: 1rem; }
+    .cert-grid-4 { grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .cert-grid-3 { grid-template-columns: 1fr; gap: 1rem; }
+    /* Reorder certificates above stats on mobile */
+    .cert-stats-order { order: 2; }
+    .cert-list-order { order: 1; }
+}
+</style>
 
 <?php
     return;

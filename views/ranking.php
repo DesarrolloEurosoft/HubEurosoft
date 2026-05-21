@@ -194,7 +194,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
             <?php foreach($p3order as $pi=>$pu):
                 $rk=$p3ranks[$pi]; $isF=($rk===1);
                 $sz=$isF?'96px':'80px'; $nm=getDisplayNameR($pu); ?>
-                <div style="flex:1;max-width:200px;">
+                <div style="flex:1 1 0%;min-width:0;max-width:200px;">
                     <div style="text-align:center;margin-bottom:0.75rem;">
                         <div style="position:relative;display:inline-block;margin-bottom:10px;">
                             <div class="lo-pa" style="width:<?=$sz?>;height:<?=$sz?>;border-radius:50%;border:4px solid <?=$borderColors[$rk]?>;overflow:hidden;background:#374151;display:flex;align-items:center;justify-content:center;margin:0 auto;<?=$isF?'box-shadow:0 10px 15px rgba(234,179,8,0.5);':''?>">
@@ -239,7 +239,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
                 $tNm  = getDisplayNameR($tu);
                 $isMe = ($tu['id'] === $userId);
             ?>
-                <div style="flex:1;max-width:<?=$isF?'160px':($rk<=3?'140px':'120px')?>;<?=$isMe?'filter:drop-shadow(0 0 8px rgba(255,106,0,0.6));':''?>">
+                <div style="flex:1 1 0%;min-width:0;max-width:<?=$isF?'160px':($rk<=3?'140px':'120px')?>;<?=$isMe?'filter:drop-shadow(0 0 8px rgba(255,106,0,0.6));':''?>">
                     <div style="text-align:center;margin-bottom:0.6rem;">
                         <div style="position:relative;display:inline-block;margin-bottom:8px;">
                             <div class="lo-pa" style="width:<?=$sz?>;height:<?=$sz?>;border-radius:50%;border:3px solid <?=$borderColors[$rk]?>;overflow:hidden;background:#374151;display:flex;align-items:center;justify-content:center;margin:0 auto;<?=$isF?'box-shadow:0 8px 20px rgba(234,179,8,0.5);':''?>">
@@ -289,7 +289,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
             </div>
 
             <!-- Dos columnas: Mi Equipo | General -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem;">
+            <div class="rank-grid-2" style="margin-bottom:1rem;">
                 <!-- Mi Equipo -->
                 <div style="background:rgba(255,106,0,0.1);border:1px solid rgba(255,106,0,0.25);border-radius:12px;padding:12px;text-align:center;">
                     <p style="font-size:0.65rem;font-weight:700;color:#FF6A00;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 4px;">Mi Equipo</p>
@@ -307,7 +307,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
             </div>
 
             <!-- Cursos + Para Top 3 -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="rank-grid-2" style="gap:10px;">
                 <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:8px 12px;border:1px solid rgba(255,255,255,0.08);">
                     <p style="font-size:0.7rem;color:#9ca3af;margin:0;">Cursos completados</p>
                     <p style="font-size:1.1rem;font-weight:700;color:white;margin:0;"><?= $myDoneGen ?></p>
@@ -510,3 +510,11 @@ function filterRanking(tab) {
     });
 }
 </script>
+
+<style>
+.rank-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+@media (max-width: 1023px) {
+    .rank-grid-2 { grid-template-columns: 1fr; gap: 10px; }
+}
+</style>

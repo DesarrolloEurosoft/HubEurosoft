@@ -484,7 +484,7 @@ $displayBU = htmlspecialchars(urldecode($buQuery));
                 <label for="email" class="form-label">Correo o Nickname</label>
                 <div class="input-wrapper">
                     <i class='bx bx-user left-icon'></i>
-                    <input type="text" id="email" name="email" class="form-control" placeholder="juan.perez o tu@empresa.com" required autocomplete="username">
+                    <input type="text" id="email" name="email" class="form-control" placeholder="juan.perez o tu@empresa.com" required>
                 </div>
             </div>
 
@@ -492,7 +492,7 @@ $displayBU = htmlspecialchars(urldecode($buQuery));
                 <label for="password" class="form-label">Contraseña</label>
                 <div class="input-wrapper">
                     <i class='bx bx-lock-alt left-icon'></i>
-                    <input type="password" id="password" name="password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+                    <input type="password" id="password" name="password" class="form-control" placeholder="••••••••" required>
                     <i class='bx bx-show right-icon' id="togglePassword" title="Mostrar contraseña"></i>
                 </div>
             </div>

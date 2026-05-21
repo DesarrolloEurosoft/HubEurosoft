@@ -48,7 +48,7 @@ function getStatusCfg($status) {
     </div>
 
     <!-- Course Grid -->
-    <div id="v3CourseContainer" style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem;margin-bottom:1.5rem;">
+    <div id="v3CourseContainer" class="v3-course-grid" style="margin-bottom:1.5rem;">
     <?php foreach ($allCoursesFlat as $idx => $c):
         $isLocked = $c['status'] === 'locked';
         $badge = getStatusCfg($c['status']);
@@ -196,10 +196,17 @@ function getStatusCfg($status) {
 .v3-filter{padding:10px 20px;border-radius:999px;font-size:0.875rem;font-weight:500;border:none;cursor:pointer;transition:all 0.2s;background:transparent;color:#4b5563;}
 .v3-filter.active{background:white;color:#111827;box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 .v3-filter:not(.active):hover{color:#111827;}
+
+.v3-course-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+.v3-course-grid.v3-list-view { grid-template-columns: 1fr !important; }
+
+@media (max-width: 1023px) {
+    .v3-course-grid { grid-template-columns: 1fr; }
+}
 </style>
 <script>
 let v3CurrentFilter='all';
 function v3Filter(btn){document.querySelectorAll('.v3-filter').forEach(b=>b.classList.remove('active'));btn.classList.add('active');v3CurrentFilter=btn.getAttribute('data-filter');v3ApplyFilters();}
 function v3ApplyFilters(){const q=(document.getElementById('v3SearchInput')?.value||'').toLowerCase();document.querySelectorAll('.v3-course').forEach(card=>{const t=card.getAttribute('data-title'),s=card.getAttribute('data-status');card.style.display=(t.includes(q)&&(v3CurrentFilter==='all'||v3CurrentFilter===s))?'':'none';});}
-function v3SetView(mode){const c=document.getElementById('v3CourseContainer'),g=document.getElementById('v3BtnGrid'),l=document.getElementById('v3BtnList');if(mode==='grid'){c.style.gridTemplateColumns='repeat(3,1fr)';g.style.background='#FF6A00';g.style.color='white';l.style.background='transparent';l.style.color='#6b7280';}else{c.style.gridTemplateColumns='1fr';l.style.background='#FF6A00';l.style.color='white';g.style.background='transparent';g.style.color='#6b7280';}}
+function v3SetView(mode){const c=document.getElementById('v3CourseContainer'),g=document.getElementById('v3BtnGrid'),l=document.getElementById('v3BtnList');if(mode==='grid'){c.classList.remove('v3-list-view');g.style.background='#FF6A00';g.style.color='white';l.style.background='transparent';l.style.color='#6b7280';}else{c.classList.add('v3-list-view');l.style.background='#FF6A00';l.style.color='white';g.style.background='transparent';g.style.color='#6b7280';}}
 </script>

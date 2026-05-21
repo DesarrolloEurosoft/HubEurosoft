@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 require 'config/database.php';
 
@@ -63,7 +63,6 @@ if (!function_exists('generateCuid')) {
 
 // Definición de la de obtencion de id
 function ObtenerRolEquivalenteHUB($rolCode) {
-    global $pdo;
     
     //LISTA DE CODIGOS DE ROL QUE SE ENVIAN EN EL MENSAJE
 
@@ -92,16 +91,8 @@ function ObtenerRolEquivalenteHUB($rolCode) {
     104	    PARTICIPANTE DE ATENCION DE INCIDENCIAS
     105	    GESTOR DE APRENDIZAJE
     */
-    
-    $stmt = $pdo->prepare("SELECT id FROM TrainingRole WHERE SuiteCode = ?");
-    $stmt->execute([$rolCode]);
-    $idRol = $stmt->fetchColumn();
 
-    if ($idRol) { 
-        $idRolHub = $idRol;
-    };
-
-    /*switch ($rolCode) {
+    switch ($rolCode) {
         case 22:
             $idRolHub = 'cmmpit1eq000bwnrbemtn6f94';
             break;
@@ -153,70 +144,8 @@ function ObtenerRolEquivalenteHUB($rolCode) {
         case 105:
             $idRolHub = 'c69c5d73722b1ddde7';
             break;                    
-    }*/
-    
-    return $idRolHub;
-}
-
-function VerificarAsignacionesPrevias($rol, $userid)
-{
-    global $pdo;
-
-    switch ($rol) {
-        case 20:
-        case 21:
-        case 22:
-        case 23:
-        case 24:
-        case 25:
-            // Si el rol esta en este intevalo se obtine la asignacion actual del rol del rango y se verifica si esta asignadoa algun otro rol
-            $stmtOR = $pdo->prepare("SELECT TR.* FROM TrainingRole AS TR INNER JOIN _TrainingRoleToUser AS TRU ON TR.id = TRU.A 
-                                                 WHERE TR.SuiteCode IN (20, 21, 22, 23, 24, 25) AND TRU.B = ? AND NOT(TR.SuiteCode = ?)");
-            $stmtOR->execute([$userid, $rol]);
-            $rolAssigment = $stmtOR->fetchAll(PDO::FETCH_ASSOC);
-
-            foreach ($rolAssigment as $row) {
-                $pdo->prepare("DELETE FROM CourseProgress WHERE userId = ?")->execute([$userid]);
-                $pdo->prepare("DELETE FROM TopicProgress WHERE userId = ?")->execute([$userid]);
-                $pdo->prepare("DELETE FROM LessonProgress WHERE userId = ?")->execute([$userid]);
-                $pdo->prepare("DELETE FROM StudentAnswer WHERE userId = ?")->execute([$userid]);
-                $pdo->prepare("DELETE FROM _TrainingRoleToUser WHERE A = ? AND B = ?")->execute([$row['id'], $userid]);
-            }
-            break;
-        case 30:
-        case 31:
-            // Si el rol esta en este intevalo se obtine la asignacion actual del rol del rango y se verifica si esta asignadoa algun otro rol
-            $stmtOR = $pdo->prepare("SELECT TR.* FROM TrainingRole AS TR INNER JOIN _TrainingRoleToUser AS TRU ON TR.id = TRU.A 
-                                                 WHERE TR.SuiteCode IN (30, 31) AND TRU.B = ? AND NOT(TR.SuiteCode = ?)");
-            $stmtOR->execute([$userid, $rol]);
-            $rolAssigment = $stmtOR->fetchAll(PDO::FETCH_ASSOC);
-
-            foreach ($rolAssigment as $row) {
-                $pdo->prepare("DELETE FROM CourseProgress WHERE userId = ?")->execute([$userid]);
-                $pdo->prepare("DELETE FROM TopicProgress WHERE userId = ?")->execute([$userid]);
-                $pdo->prepare("DELETE FROM LessonProgress WHERE userId = ?")->execute([$userid]);
-                $pdo->prepare("DELETE FROM StudentAnswer WHERE userId = ?")->execute([$userid]);
-                $pdo->prepare("DELETE FROM _TrainingRoleToUser WHERE A = ? AND B = ?")->execute([$row['id'], $userid]);
-            }
-            break;
-        case 40:
-        case 41:
-        case 42:
-            // Si el rol esta en este intevalo se obtine la asignacion actual del rol del rango y se verifica si esta asignadoa algun otro rol
-            $stmtOR = $pdo->prepare("SELECT TR.* FROM TrainingRole AS TR INNER JOIN _TrainingRoleToUser AS TRU ON TR.id = TRU.A 
-                                                 WHERE TR.SuiteCode IN (40, 41, 42) AND TRU.B = ? AND NOT(TR.SuiteCode = ?)");
-            $stmtOR->execute([$userid, $rol]);
-            $rolAssigment = $stmtOR->fetchAll(PDO::FETCH_ASSOC);
-
-            foreach ($rolAssigment as $row) {
-                $pdo->prepare("DELETE FROM CourseProgress WHERE userId = ?")->execute([$userid]);
-                $pdo->prepare("DELETE FROM TopicProgress WHERE userId = ?")->execute([$userid]);
-                $pdo->prepare("DELETE FROM LessonProgress WHERE userId = ?")->execute([$userid]);
-                $pdo->prepare("DELETE FROM StudentAnswer WHERE userId = ?")->execute([$userid]);
-                $pdo->prepare("DELETE FROM _TrainingRoleToUser WHERE A = ? AND B = ?")->execute([$row['id'], $userid]);
-            }
-            break;
     }
+    return $idRolHub;
 }
 
 // RECIBIR de VB.NET a PHP:
@@ -419,14 +348,19 @@ if (isset($_GET['TOKEN'])) {
             try {
                 $cid = $datos['CID'];
                 $uid = $datos['UID'];
-                $ufn = $datos['UFN'];
-                $uln = $datos['ULN'];
-                $email = $datos['EML'];
-                $nnm = $datos['NNM'];
-                $psw = $datos['PSW'];
+                $ufn = trim($datos['UFN'] ?? '');
+                $uln = trim($datos['ULN'] ?? '');
+                $email = trim($datos['EML'] ?? '');
+                $nnm = trim($datos['NNM'] ?? '');
+                $psw = trim($datos['PSW'] ?? '');
+                
                 $name = trim("$ufn $uln");
                 $hash = password_hash($psw, PASSWORD_BCRYPT);
                 $newId = generateCuid();
+                
+                if (empty($email)) {
+                    $email = "{$newId}@hubeurosoft.com";
+                }
                 $role = "STUDENT";
  
                 $stmtUN = $pdo->prepare("SELECT id, companyId FROM BusinessUnit WHERE IDGSE = ?");
@@ -436,11 +370,6 @@ if (isset($_GET['TOKEN'])) {
                 if ($row) {
                     $unid = $row['id'];
                     $companyId = $row['companyId'];
-
-                    // Si no se proporciono correo, inyectamos el ficticio basado en el id del usuario en el hub
-                    if (empty($email)) {
-                        $email = "$newId@hubeurosoft.com";
-                    }
 
                     $stmt = $pdo->prepare("INSERT INTO User (id, IDSuite, name, firstName, lastName, nickname, email, passwordHash, role, companyId, businessUnitId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
                     $stmt->execute([$newId, $uid, $name, $ufn, $uln, $nnm, $email, $hash, $role, $companyId, $unid]);
@@ -460,11 +389,15 @@ if (isset($_GET['TOKEN'])) {
             try {
                 $cid = $datos['CID'];
                 $uid = $datos['UID'];
-                $ufn = $datos['UFN'];
-                $uln = $datos['ULN'];
-                $email = $datos['EML'];
-                $nnm = $datos['NNM'];
-                $psw = $datos['PSW'];
+                $ufn = trim($datos['UFN'] ?? '');
+                $uln = trim($datos['ULN'] ?? '');
+                $email = trim($datos['EML'] ?? '');
+                $nnm = trim($datos['NNM'] ?? '');
+                $psw = trim($datos['PSW'] ?? '');
+                
+                if (empty($email)) {
+                    $email = "{$uid}@hubeurosoft.com";
+                }
                 $name = trim("$ufn $uln");
                 $hash = password_hash($psw, PASSWORD_BCRYPT);
 
@@ -481,27 +414,13 @@ if (isset($_GET['TOKEN'])) {
                     $id = $stmtU->fetchColumn();
 
                     if ($id) {
-
-                        // Si no se proporciono correo, inyectamos el ficticio basado en el id del usuario en el hub
-                        if (empty($email)) {
-                            $email = "$id@hubeurosoft.com";
-                        }                    
-
                         $stmt = $pdo->prepare("UPDATE User SET firstName=?, lastName=?, name=?, nickname=?, email=?, passwordHash=?, updatedAt=NOW() 
                                                WHERE companyId = ? AND businessUnitId = ? AND IDSuite = ?");
                         $stmt->execute([$ufn, $uln, $name, $nnm, $email, $hash, $companyId, $unid, $uid]);
                         $successMsg = "Usuario actualizado.";
-
                     } else {
-
                         $newId = generateCuid();
                         $role = "STUDENT";
-
-                        // Si no se proporciono correo, inyectamos el ficticio basado en el id del usuario en el hub
-                        if (empty($email)) {
-                            $email = $newId . "@hubeurosoft.com";
-                        }  
-
                         $stmt = $pdo->prepare("INSERT INTO User (id, IDSuite, name, firstName, lastName, nickname, email, passwordHash, role, companyId, businessUnitId, createdAt, updatedAt) 
                                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
                         $stmt->execute([$newId, $uid, $name, $ufn, $uln, $nnm, $email, $hash, $role, $companyId, $unid]);
@@ -561,10 +480,6 @@ if (isset($_GET['TOKEN'])) {
                 $uid = $datos['UID'];
                 $rol = $datos['ROL'];
 
-                //$stmt = $pdo->prepare("SELECT id FROM TrainingRole WHERE SuiteCode = ?");
-                //$stmt->execute([$rol]);
-                //$idRolHub = $stmt->fetchColumn();
-
                 $idRolHub = ObtenerRolEquivalenteHUB($rol);
 
                 $stmtUN = $pdo->prepare("SELECT id, companyId FROM BusinessUnit WHERE IDGSE = ?");
@@ -581,8 +496,11 @@ if (isset($_GET['TOKEN'])) {
                     $id = $stmtU->fetchColumn();
             
                     if ($id) {
+                        //$id = $rowUser['id'];
+
                         $stmtTR = $pdo->prepare("INSERT INTO _TrainingRoleToUser (A, B) VALUES (?, ?)");
                         $stmtTR->execute([$idRolHub, $id]);
+
                         $successMsg = "Rol asignado.";
                     }
                 }
@@ -598,10 +516,6 @@ if (isset($_GET['TOKEN'])) {
                 $cid = $datos['CID'];
                 $uid = $datos['UID'];
                 $rol = $datos['ROL'];
-
-                //$stmt = $pdo->prepare("SELECT id FROM TrainingRole WHERE SuiteCode = ?");
-                //$stmt->execute([$rol]);
-                //$idRolHub = $stmt->fetchColumn();
 
                 $idRolHub = ObtenerRolEquivalenteHUB($rol);
 
@@ -623,6 +537,7 @@ if (isset($_GET['TOKEN'])) {
                         $pdo->prepare("DELETE FROM LessonProgress WHERE userId = ?")->execute([$id]);
                         $pdo->prepare("DELETE FROM StudentAnswer WHERE userId = ?")->execute([$id]);
                         $pdo->prepare("DELETE FROM _TrainingRoleToUser WHERE A = ? AND B = ?")->execute([$idRolHub, $id]);
+
                         $successMsg = "Rol desasignado.";
                     }
                 }
@@ -630,64 +545,7 @@ if (isset($_GET['TOKEN'])) {
                 $successMsg = "" . $e->getMessage();
             }
             break;
-
-       case 6: // VERIFICAR ROL ASIGNADO Y ACTUALIZAR ASIGNACION ROL
-
-            // OPE={0}&CID={1}&UID={2}&ROL={3}
-
-            try {
-                // 1. se reciben datos
-                $cid = $datos['CID'];
-                $uid = $datos['UID'];
-                $rol = $datos['ROL'];
-
-                //2. Recuperar ID Usuario en el Hub
-
-                $stmtUN = $pdo->prepare("SELECT id, companyId FROM BusinessUnit WHERE IDGSE = ?");
-                $stmtUN->execute([$cid]);
-                $rowUN = $stmtUN->fetch(PDO::FETCH_ASSOC);
-
-                if ($rowUN) {
-                    $unid = $rowUN['id'];
-                    $companyId = $rowUN['companyId'];
-
-                    $stmtU = $pdo->prepare("SELECT id FROM User WHERE (companyId = ?) AND (businessUnitId = ?) AND (IDSuite = ?)");
-                    $stmtU->execute([$companyId, $unid, $uid]);
-                    $userid = $stmtU->fetchColumn();
-
-                    if ($userid) {
-
-                        // 3. Recuepara el ID Rol en el HUB 
-                        //$stmt = $pdo->prepare("SELECT id FROM TrainingRole WHERE SuiteCode = ?");
-                        //stmt->execute([$rol]);
-                        //idRolHub = $stmt->fetchColumn();
-                        
-                        $idRolHub = ObtenerRolEquivalenteHUB($rol);
-
-                        // 4.5. Verificar si la dupla existe en la tabala _TrainingRoleToUser
-                            
-                        $stmtTR = $pdo->prepare("SELECT COUNT(*) FROM _TrainingRoleToUser WHERE A = ? AND B = ?");
-                        $stmtTR->execute([$idRolHub, $userid]);
-                        $rolCount = $stmtTR->fetchColumn();
-
-                        if ($rolCount == 0) { 
-
-                            // 4.6. si no existe un registro se realiza la asignación registrando los ids de usuario y rol y se verifica que no esten asignados otros roles del mismo modulo, de existir se      eliminan dichas 
-                            $stmtTR = $pdo->prepare("INSERT INTO _TrainingRoleToUser (A, B) VALUES (?, ?)");
-                            $stmtTR->execute([$idRolHub, $userid]);
-                            $successMsg = "Rol asignado.";
-                            VerificarAsignacionesPrevias($rol, $userid);
-                        } else {
-
-                            // 4.5. si existe un registro se verifica que no esten asignados otros roles del mismo modulo, de existir se eliminan dichas asignaciones
-                            VerificarAsignacionesPrevias($rol, $userid);
-                        }
-                    }
-                }
-            } catch (PDOException $e) {
-                $successMsg = "" . $e->getMessage();
-            }
-            break;            
+        
     }
 
  echo $successMsg;
