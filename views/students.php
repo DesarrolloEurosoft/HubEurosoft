@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 if (!defined('DB_HOST') && !isset($pdo)) { die('Direct access not permitted'); }
 
 $userRole = strtoupper($_SESSION['user_role'] ?? '');
@@ -198,10 +198,97 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         elseif ($action === 'delete') {
             $id = $_POST['user_id'] ?? '';
-            try { $pdo->prepare("DELETE FROM _TrainingRoleToUser WHERE B = ?")->execute([$id]); } catch(Exception $e){}
-            $stmt = $pdo->prepare("DELETE FROM User WHERE id = ?");
-            $stmt->execute([$id]);
-            $successMsg = "Usuario eliminado permanentemente del sistema.";
+            if ($id) {
+                $pdo->beginTransaction();
+                // Limpiar foros (cascade)
+                $stmtT2 = $pdo->prepare("SELECT id FROM ForumTopic WHERE authorId = ?");
+                $stmtT2->execute([$id]);
+                $tIds2 = $stmtT2->fetchAll(PDO::FETCH_COLUMN);
+                if (!empty($tIds2)) {
+                    $ph2 = str_repeat('?,', count($tIds2)-1) . '?';
+                    try { $pdo->prepare("DELETE FROM ForumReplyLike WHERE replyId IN (SELECT id FROM ForumReply WHERE topicId IN ($ph2))")->execute($tIds2); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM ForumReply WHERE topicId IN ($ph2)")->execute($tIds2); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM ForumTopicLike WHERE topicId IN ($ph2)")->execute($tIds2); } catch(Exception $e){}
+                }
+                $actTables = ['UserPoints','UserAchievement','usercertificate','CourseProgress','LessonProgress','TopicProgress','StudentAnswer','LoginLog','notification','ForumTopicLike','ForumReplyLike','ForumReplyHelpfulVote'];
+                foreach ($actTables as $tbl) { try { $pdo->prepare("DELETE FROM $tbl WHERE userId=?")->execute([$id]); } catch(Exception $e){} }
+                try { $pdo->prepare("DELETE FROM ForumReply WHERE authorId=?")->execute([$id]); } catch(Exception $e){}
+                try { $pdo->prepare("DELETE FROM ForumTopic WHERE authorId=?")->execute([$id]); } catch(Exception $e){}
+                try { $pdo->prepare("DELETE FROM _TrainingRoleToUser WHERE B=?")->execute([$id]); } catch(Exception $e){}
+                $pdo->prepare("DELETE FROM User WHERE id=?")->execute([$id]);
+                $pdo->commit();
+                $successMsg = "Usuario eliminado permanentemente del sistema.";
+            }
+        }
+        elseif ($action === 'reset_activity') {
+            $id       = $_POST['user_id'] ?? '';
+            $sections = $_POST['reset_sections'] ?? [];
+            if ($id && !empty($sections)) {
+                $pdo->beginTransaction();
+                if (in_array('progress', $sections)) {
+                    try { $pdo->prepare("DELETE FROM CourseProgress  WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM LessonProgress  WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM TopicProgress   WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM StudentAnswer   WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                }
+                if (in_array('points', $sections)) {
+                    try { $pdo->prepare("DELETE FROM UserPoints       WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM UserAchievement  WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("UPDATE User SET totalPoints=0, updatedAt=NOW() WHERE id=?")->execute([$id]); } catch(Exception $e){}
+                }
+                if (in_array('certificates', $sections)) {
+                    try { $pdo->prepare("DELETE FROM usercertificate  WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                }
+                if (in_array('forums', $sections)) {
+                    $stmtTF = $pdo->prepare("SELECT id FROM ForumTopic WHERE authorId=?");
+                    $stmtTF->execute([$id]);
+                    $topicIdsForum = $stmtTF->fetchAll(PDO::FETCH_COLUMN);
+                    if (!empty($topicIdsForum)) {
+                        $phF = str_repeat('?,', count($topicIdsForum)-1) . '?';
+                        try { $pdo->prepare("DELETE FROM ForumReplyLike WHERE replyId IN (SELECT id FROM ForumReply WHERE topicId IN ($phF))")->execute($topicIdsForum); } catch(Exception $e){}
+                        try { $pdo->prepare("DELETE FROM ForumReply WHERE topicId IN ($phF)")->execute($topicIdsForum); } catch(Exception $e){}
+                        try { $pdo->prepare("DELETE FROM ForumTopicLike WHERE topicId IN ($phF)")->execute($topicIdsForum); } catch(Exception $e){}
+                    }
+                    try { $pdo->prepare("DELETE FROM ForumTopicLike       WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM ForumReplyLike        WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM ForumReplyHelpfulVote WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM ForumReply  WHERE authorId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM ForumTopic  WHERE authorId=?")->execute([$id]); } catch(Exception $e){}
+                }
+                if (in_array('logs', $sections)) {
+                    try { $pdo->prepare("DELETE FROM LoginLog    WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM notification WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                }
+                $pdo->commit();
+                $successMsg = "Actividad del usuario reseteada exitosamente.";
+            } else {
+                $errorMsg = "Selecciona al menos una sección para resetear.";
+            }
+        }
+        elseif ($action === 'delete_bulk') {
+            $ids = array_filter($_POST['user_ids'] ?? []);
+            if (!empty($ids)) {
+                $ph = str_repeat('?,', count($ids)-1) . '?';
+                $pdo->beginTransaction();
+                // Foros cascade
+                $stmtTB = $pdo->prepare("SELECT id FROM ForumTopic WHERE authorId IN ($ph)");
+                $stmtTB->execute($ids);
+                $topicIdsBulk = $stmtTB->fetchAll(PDO::FETCH_COLUMN);
+                if (!empty($topicIdsBulk)) {
+                    $phT = str_repeat('?,', count($topicIdsBulk)-1) . '?';
+                    try { $pdo->prepare("DELETE FROM ForumReplyLike WHERE replyId IN (SELECT id FROM ForumReply WHERE topicId IN ($phT))")->execute($topicIdsBulk); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM ForumReply WHERE topicId IN ($phT)")->execute($topicIdsBulk); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM ForumTopicLike WHERE topicId IN ($phT)")->execute($topicIdsBulk); } catch(Exception $e){}
+                }
+                $bulkTables = ['UserPoints','UserAchievement','usercertificate','CourseProgress','LessonProgress','TopicProgress','StudentAnswer','LoginLog','notification','ForumTopicLike','ForumReplyLike','ForumReplyHelpfulVote'];
+                foreach ($bulkTables as $tbl) { try { $pdo->prepare("DELETE FROM $tbl WHERE userId IN ($ph)")->execute($ids); } catch(Exception $e){} }
+                try { $pdo->prepare("DELETE FROM ForumReply WHERE authorId IN ($ph)")->execute($ids); } catch(Exception $e){}
+                try { $pdo->prepare("DELETE FROM ForumTopic WHERE authorId IN ($ph)")->execute($ids); } catch(Exception $e){}
+                try { $pdo->prepare("DELETE FROM _TrainingRoleToUser WHERE B IN ($ph)")->execute($ids); } catch(Exception $e){}
+                $pdo->prepare("DELETE FROM User WHERE id IN ($ph)")->execute($ids);
+                $pdo->commit();
+                $successMsg = count($ids) . " usuario(s) eliminados permanentemente del sistema.";
+            }
         }
         elseif ($action === 'import_csv') {
             if (isset($_FILES['csv_file']) && $_FILES['csv_file']['error'] === UPLOAD_ERR_OK) {
@@ -467,9 +554,14 @@ try {
 <main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: hidden; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 2rem;">
     <div style="background: white; overflow: hidden; border-radius: 24px;">
     <div class="table-responsive" style="margin: 0; border: none;">
+        <form method="POST" id="bulkDeleteForm">
+        <input type="hidden" name="action" value="delete_bulk">
         <table class="data-table">
             <thead>
                 <tr>
+                    <th style="width:40px; text-align:center;">
+                        <input type="checkbox" id="selectAllUsers" onchange="toggleSelectAll(this)" title="Seleccionar todos" style="width:16px;height:16px;cursor:pointer;">
+                    </th>
                     <th>Nombre y Contacto</th>
                     <th>Compañía Padre</th>
                     <th>Unidad Mapeada</th>
@@ -482,6 +574,9 @@ try {
                 <?php if (count($users) > 0): ?>
                     <?php foreach ($users as $user): ?>
                         <tr data-company="<?= htmlspecialchars(strtolower($user['companyName'] ?? '')) ?>" data-bu="<?= htmlspecialchars(strtolower($user['buName'] ?? '')) ?>" data-nickname="<?= htmlspecialchars(strtolower($user['nickname'] ?? '')) ?>">
+                            <td style="text-align:center; padding: 0.5rem;">
+                                <input type="checkbox" name="user_ids[]" value="<?= htmlspecialchars($user['id']) ?>" class="user-row-check" onchange="updateBulkBar()" style="width:16px;height:16px;cursor:pointer;">
+                            </td>
                             <td>
                                 <div style="font-weight: 500; color: var(--text-main);">
                                     <?= htmlspecialchars($user['name'] ?: 'Desconocido') ?>
@@ -545,6 +640,12 @@ try {
                                         title="Ver Avance de Cursos">
                                         <i class='bx bx-book-reader'></i>
                                     </button>
+
+                                    <button type="button" class="btn" style="padding: 0.4rem; background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa;"
+                                        onclick="openResetModal('<?= htmlspecialchars($user['id']) ?>', <?= htmlspecialchars(json_encode((string)($user['name'] ?: 'Usuario'))) ?>, <?= htmlspecialchars(json_encode((string)($user['email'] ?? ''))) ?>)"
+                                        title="Resetear Actividad">
+                                        <i class='bx bx-revision'></i>
+                                    </button>
                                     
                                     <button class="btn" style="padding: 0.4rem; background: var(--bg-color); color: var(--text-muted);" 
                                         onclick="openEditUser( this.dataset )"
@@ -562,10 +663,10 @@ try {
                                         <i class='bx bx-edit'></i>
                                     </button>
                                     
-                                    <form method="POST" style="display:inline;" onsubmit="return confirm('¿Borrar a este usuario de la base de datos de manera irreversible? Se perderá todo su progreso.');">
+                                    <form method="POST" style="display:inline;" onsubmit="return confirm('¿Borrar a este usuario de forma irreversible? Se eliminará todo su historial y progreso.');">
                                         <input type="hidden" name="action" value="delete">
                                         <input type="hidden" name="user_id" value="<?= htmlspecialchars($user['id'] ?? '') ?>">
-                                        <button type="submit" class="btn" style="padding: 0.4rem; background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca;" title="Borrar Acceso">
+                                        <button type="submit" class="btn" style="padding: 0.4rem; background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca;" title="Borrar Usuario">
                                             <i class='bx bx-trash'></i>
                                         </button>
                                     </form>
@@ -574,19 +675,130 @@ try {
                         </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
-                    <tr><td colspan="6" style="text-align: center; padding: 4rem; color: var(--text-muted);">El registro de usuarios está vacío.</td></tr>
+                    <tr><td colspan="7" style="text-align: center; padding: 4rem; color: var(--text-muted);">El registro de usuarios está vacío.</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
+        </form>
     </div>
     </div>
 </main>
+
+<!-- Barra flotante de eliminación masiva -->
+<div id="bulkActionBar" style="
+    position: fixed; top: -80px; left: 50%; transform: translateX(-50%);
+    background: #1e293b; color: white; border-radius: 0 0 16px 16px;
+    padding: 0.75rem 1.5rem; display: flex; align-items: center; gap: 1rem;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25); z-index: 9999;
+    transition: top 0.35s cubic-bezier(0.34,1.56,0.64,1); white-space: nowrap;
+">
+    <span style="font-size:0.9rem; font-weight:600;">
+        <i class='bx bx-check-square' style="color:#6366f1; margin-right:4px;"></i>
+        <span id="bulkCount">0</span> usuario(s) seleccionado(s)
+    </span>
+    <button type="button" onclick="toggleSelectAll(document.getElementById('selectAllUsers'), true)" style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:#94a3b8; border-radius:8px; padding:0.4rem 0.8rem; font-size:0.8rem; cursor:pointer;">
+        <i class='bx bx-x'></i> Deseleccionar todo
+    </button>
+    <button type="button" onclick="confirmBulkDelete()" style="background:#ef4444; border:none; color:white; border-radius:8px; padding:0.4rem 1rem; font-size:0.85rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:0.4rem;">
+        <i class='bx bx-trash'></i> Eliminar <span id="bulkCountBtn">0</span> usuarios
+    </button>
+</div>
 
 <!-- ================= MODALES ================= -->
 <style>
     .two-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
     @media(max-width: 600px){ .two-cols { grid-template-columns: 1fr; } }
+    .reset-section-label {
+        display: flex; align-items: flex-start; gap: 0.75rem;
+        padding: 0.75rem; border-radius: 8px; cursor: pointer;
+        border: 1.5px solid #e5e7eb; margin-bottom: 0.5rem;
+        transition: border-color 0.15s, background 0.15s;
+    }
+    .reset-section-label:hover { background: #fafafa; border-color: #d1d5db; }
+    .reset-section-label input[type=checkbox] { width:18px; height:18px; margin-top:2px; flex-shrink:0; accent-color:#ea580c; }
+    .reset-section-label.danger-section { border-color: #fecaca; background: #fff5f5; }
+    .reset-section-label.danger-section:hover { background: #fee2e2; }
 </style>
+
+<!-- Modal: Reset de Actividad -->
+<div class="modal-overlay" id="modalReset">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header" style="border-bottom: 1px solid #f3f4f6; padding-bottom: 1rem;">
+            <h3 class="modal-title" style="display:flex; align-items:center; gap:0.5rem;">
+                <i class='bx bx-revision' style="color:#ea580c;"></i> Resetear Actividad
+            </h3>
+            <button class="modal-close" onclick="closeModal('modalReset')"><i class='bx bx-x'></i></button>
+        </div>
+        <form method="POST">
+            <input type="hidden" name="action" value="reset_activity">
+            <input type="hidden" name="user_id" id="reset_user_id" value="">
+
+            <div style="padding: 0.25rem 0 1rem;">
+                <div style="background:#fff7ed; border-radius:10px; padding:0.75rem 1rem; margin-bottom:1.25rem; display:flex; align-items:center; gap:0.6rem;">
+                    <i class='bx bx-user-circle' style="font-size:1.5rem; color:#ea580c; flex-shrink:0;"></i>
+                    <div>
+                        <div style="font-weight:700; color:#1e293b; font-size:0.95rem;" id="reset_user_name"></div>
+                        <div style="font-size:0.8rem; color:#78716c;" id="reset_user_email"></div>
+                    </div>
+                </div>
+
+                <p style="font-size:0.85rem; color:#6b7280; margin-bottom:1rem; font-weight:600;">Selecciona qué deseas resetear:</p>
+
+                <label class="reset-section-label">
+                    <input type="checkbox" name="reset_sections[]" value="progress" checked>
+                    <div>
+                        <div style="font-weight:600; color:#1e293b; font-size:0.9rem;"><i class='bx bx-book-open' style="color:#6366f1;"></i> Progreso de cursos</div>
+                        <div style="font-size:0.77rem; color:#9ca3af; margin-top:2px;">CourseProgress, LessonProgress, TopicProgress, StudentAnswer</div>
+                    </div>
+                </label>
+
+                <label class="reset-section-label">
+                    <input type="checkbox" name="reset_sections[]" value="points" checked>
+                    <div>
+                        <div style="font-weight:600; color:#1e293b; font-size:0.9rem;"><i class='bx bxs-star' style="color:#f59e0b;"></i> Puntos XP y Logros</div>
+                        <div style="font-size:0.77rem; color:#9ca3af; margin-top:2px;">UserPoints, UserAchievement, XP → 0</div>
+                    </div>
+                </label>
+
+                <label class="reset-section-label danger-section">
+                    <input type="checkbox" name="reset_sections[]" value="certificates">
+                    <div>
+                        <div style="font-weight:600; color:#b91c1c; font-size:0.9rem;"><i class='bx bx-certification'></i> Certificados emitidos <i class='bx bx-error-circle' style="color:#dc2626; font-size:0.9rem;"></i></div>
+                        <div style="font-size:0.77rem; color:#9ca3af; margin-top:2px;">usercertificate &mdash; Los certificados ya impresos seguirán existiendo fuera del sistema</div>
+                    </div>
+                </label>
+
+                <label class="reset-section-label danger-section">
+                    <input type="checkbox" name="reset_sections[]" value="forums">
+                    <div>
+                        <div style="font-weight:600; color:#b91c1c; font-size:0.9rem;"><i class='bx bx-conversation'></i> Publicaciones en Foros <i class='bx bx-error-circle' style="color:#dc2626; font-size:0.9rem;"></i></div>
+                        <div style="font-size:0.77rem; color:#9ca3af; margin-top:2px;">ForumTopic, ForumReply y sus likes &mdash; puede afectar respuestas de otros usuarios</div>
+                    </div>
+                </label>
+
+                <label class="reset-section-label">
+                    <input type="checkbox" name="reset_sections[]" value="logs">
+                    <div>
+                        <div style="font-weight:600; color:#1e293b; font-size:0.9rem;"><i class='bx bx-history' style="color:#64748b;"></i> Notificaciones y Log de accesos</div>
+                        <div style="font-size:0.77rem; color:#9ca3af; margin-top:2px;">notification, LoginLog</div>
+                    </div>
+                </label>
+            </div>
+
+            <div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px; padding: 0.75rem 1rem; font-size: 0.83rem; color: #92400e; margin-bottom: 1.25rem; display:flex; align-items: center; gap: 0.6rem;">
+                <i class='bx bx-error' style="font-size:1.2rem; color:#d97706; flex-shrink:0;"></i>
+                <span>Esta acción es <strong>irreversible</strong>. Los datos seleccionados se eliminarán permanentemente de la base de datos.</span>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 1rem;">
+                <button type="button" class="btn" style="background: var(--bg-color); color: var(--text-main);" onclick="closeModal('modalReset')">Cancelar</button>
+                <button type="submit" class="btn" style="background:#ea580c; color:white; font-weight:700; border:none;" onclick="return confirm('¿Confirmas el reset de la actividad seleccionada? Esta acción no se puede deshacer.');">
+                    <i class='bx bx-revision'></i> Confirmar Reset
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <!-- Modal: Crear Usuario -->
 <div class="modal-overlay" id="modalCreate">
@@ -850,6 +1062,10 @@ try {
         // Forzar visibilidad suprema
         modal.style.zIndex = '999999';
     });
+
+    // Mover barra de acciones masivas al body para que position:fixed funcione correctamente
+    const bulkBar = document.getElementById('bulkActionBar');
+    if (bulkBar) document.body.appendChild(bulkBar);
 
     // openModal definida más abajo
 
@@ -1168,4 +1384,66 @@ try {
             }
         }
     });
+
+    // ======== RESET DE ACTIVIDAD ========
+    function openResetModal(id, name, email) {
+        document.getElementById('reset_user_id').value = id;
+        document.getElementById('reset_user_name').textContent = name;
+        document.getElementById('reset_user_email').textContent = email;
+        // Resetear checkboxes a estado por defecto
+        document.querySelectorAll('#modalReset input[type=checkbox]').forEach(cb => {
+            cb.checked = ['progress', 'points'].includes(cb.value);
+        });
+        openModal('modalReset');
+    }
+
+    // ======== ELIMINACIÓN MASIVA ========
+    function toggleSelectAll(masterCb, forceUncheck = false) {
+        if (forceUncheck) masterCb.checked = false;
+        const checks = document.querySelectorAll('.user-row-check');
+        checks.forEach(cb => {
+            // Solo seleccionar filas visibles
+            const row = cb.closest('tr');
+            if (!row || row.style.display === 'none') return;
+            cb.checked = masterCb.checked;
+        });
+        updateBulkBar();
+    }
+
+    function updateBulkBar() {
+        const checked = document.querySelectorAll('.user-row-check:checked');
+        const bar = document.getElementById('bulkActionBar');
+        const count = checked.length;
+        document.getElementById('bulkCount').textContent = count;
+        document.getElementById('bulkCountBtn').textContent = count;
+        if (count > 0) {
+            bar.style.top = '0px';
+            const masterCb = document.getElementById('selectAllUsers');
+            const total = document.querySelectorAll('.user-row-check').length;
+            if (masterCb) masterCb.checked = (count === total);
+        } else {
+            bar.style.top = '-80px';
+            const masterCb = document.getElementById('selectAllUsers');
+            if (masterCb) masterCb.checked = false;
+        }
+    }
+
+    function confirmBulkDelete() {
+        const checked = document.querySelectorAll('.user-row-check:checked');
+        const count = checked.length;
+        if (count === 0) return;
+        if (!confirm(`¿Eliminar ${count} usuario(s) de forma permanente e irreversible? Se borrará todo su historial, progreso y actividad.`)) return;
+
+        const form = document.getElementById('bulkDeleteForm');
+        // Limpiar inputs anteriores (excepto action)
+        Array.from(form.querySelectorAll('input[name="user_ids[]"]')).forEach(el => el.remove());
+        checked.forEach(cb => {
+            const inp = document.createElement('input');
+            inp.type = 'hidden';
+            inp.name = 'user_ids[]';
+            inp.value = cb.value;
+            form.appendChild(inp);
+        });
+        form.submit();
+    }
 </script>
