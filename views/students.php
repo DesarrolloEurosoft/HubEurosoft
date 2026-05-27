@@ -554,8 +554,6 @@ try {
 <main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: hidden; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 2rem;">
     <div style="background: white; overflow: hidden; border-radius: 24px;">
     <div class="table-responsive" style="margin: 0; border: none;">
-        <form method="POST" id="bulkDeleteForm">
-        <input type="hidden" name="action" value="delete_bulk">
         <table class="data-table">
             <thead>
                 <tr>
@@ -647,7 +645,7 @@ try {
                                         <i class='bx bx-revision'></i>
                                     </button>
                                     
-                                    <button class="btn" style="padding: 0.4rem; background: var(--bg-color); color: var(--text-muted);" 
+                                    <button type="button" class="btn" style="padding: 0.4rem; background: var(--bg-color); color: var(--text-muted);" 
                                         onclick="openEditUser( this.dataset )"
                                         data-id="<?= htmlspecialchars($user['id'] ?? '') ?>"
                                         data-name="<?= htmlspecialchars($user['name'] ?? '') ?>"
@@ -679,10 +677,14 @@ try {
                 <?php endif; ?>
             </tbody>
         </table>
-        </form>
     </div>
     </div>
 </main>
+
+<!-- Form oculto para eliminación masiva (poblado dinámicamente por JS) -->
+<form id="bulkDeleteForm" method="POST" style="display:none;">
+    <input type="hidden" name="action" value="delete_bulk">
+</form>
 
 <!-- Barra flotante de eliminación masiva -->
 <div id="bulkActionBar" style="
