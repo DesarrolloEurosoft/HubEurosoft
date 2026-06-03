@@ -176,8 +176,8 @@ elseif ($step === 'bus' && ($isAdmin || $isCoLeader)):
         <i class='bx bx-briefcase-alt-2'></i> <?= htmlspecialchars($coName) ?> <i class='bx bx-chevron-right' style="color:#cbd5e1;"></i> <i class='bx bx-network-chart'></i> Selecciona una Unidad de Negocio
     </div>
 
-    <main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: hidden; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 2rem;">
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; padding: 1.5rem; background: #f8fafc;">
+    <main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: visible; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 2rem;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 1rem; padding: 1.5rem; background: #f8fafc;">
         <?php foreach($bus as $b): ?>
             <a href="index.php?view=forums&step=forums&filter_co=<?= urlencode($viewCompanyId) ?>&filter_bu=<?= urlencode($b['id']) ?>" style="display: block; text-decoration: none; color: inherit;">
                 <div style="background: white; padding: 1.25rem; border-radius: 16px; height: 100%; display: flex; align-items: center; gap: 1rem; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; border: 1px solid #e2e8f0;" onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 10px 15px -3px rgba(0,0,0,0.1)';" onmouseout="this.style.transform='none'; this.style.boxShadow='none';">
@@ -708,8 +708,21 @@ elseif ($step === 'forums'):
 
     <h1 style="font-size:1.75rem;font-weight:700;color:#111827;margin:0 0 1.5rem 0;">Foros</h1>
 
-    <!-- ── STATS — misma estructura que Inicio/Certificados ── -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1.25rem;margin-bottom:1.5rem;width:100%;">
+    <style>
+    .forum-stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1.25rem; margin-bottom:1.5rem; width:100%; }
+    .forum-cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr)); gap:1rem; padding:1.25rem 1.5rem 1.5rem; }
+    @media(max-width:768px) {
+        .forum-stats-grid { grid-template-columns:repeat(2,1fr); gap:0.75rem; }
+        .forum-stats-grid > div { padding: 1rem !important; }
+        .forum-stats-grid p:first-of-type { font-size:1.5rem !important; }
+    }
+    @media(max-width:480px) {
+        .forum-stats-grid { grid-template-columns:repeat(2,1fr); gap:0.5rem; }
+    }
+    </style>
+
+    <!-- ── STATS ── -->
+    <div class="forum-stats-grid">
 
 
         <!-- Canales — dark card -->
@@ -784,7 +797,7 @@ elseif ($step === 'forums'):
                 <p style="margin:0;font-size:0.9rem;">Aún no se han generado canales de discusión para este segmento.</p>
             </div>
         <?php else: ?>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:1rem;padding:1.25rem 1.5rem 1.5rem;">
+            <div class="forum-cards-grid">
             <?php foreach ($forums as $forum):
                 [$icon, $grad] = forumCardStyle($forum['trName'] ?? '', $forum['targetRole']);
                 // Detectar si es el foro LO

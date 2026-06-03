@@ -48,6 +48,14 @@
     --v3-gap-lg: 20px;
 }
 
+/* ─── Reset global: elimina margen por defecto del browser ─── */
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    overflow-x: hidden;
+}
+
 /* ─── Reset del layout estudiante ─── */
 .student-v3-layout {
     font-family: var(--v3-font);
@@ -1050,8 +1058,9 @@
     /* -- Forum Topic: sidebar va debajo del contenido -- */
     .ft-main-grid { grid-template-columns: 1fr; }
 
-    /* -- Cursos: 3 cols → 2 cols en tablet -- */
-    #v3CourseContainer { grid-template-columns: repeat(2, 1fr) !important; }
+    /* -- Cursos: 3 cols → 1 col en móvil, ocultar toggle de vista -- */
+    #v3CourseContainer { grid-template-columns: 1fr !important; }
+    .v3-view-toggle { display: none !important; }
 
     /* -- Ranking podium: reducir gap y quitar max-width de columnas de jugador -- */
     .lo-pf { gap: 0.35rem !important; }
@@ -1079,6 +1088,21 @@
     /* -- Perfil: colapsar 380px+1fr → columna única -- */
     #profileGrid { grid-template-columns: 1fr !important; }
 
+    /* -- Ranking: search input no desborde -- */
+    .rank-search-wrap { min-width: 0 !important; width: 100% !important; max-width: 180px; }
+
+    /* -- Certificates: stats grid con altura independiente por fila -- */
+    .cert-grid-4 { align-items: start; }
+
+    /* -- Evitar desbordamiento horizontal (centra el contenido correctamente) -- */
+    .student-v3-layout { overflow-x: hidden; }
+    main { overflow-x: hidden; max-width: 100%; }
+    .v3-page-content { overflow-x: hidden; }
+
+    /* -- Ranking / Certificados: eliminar padding horizontal redundante en móvil -- */
+    .rank-page-wrap,
+    .cert-wrapper { padding-left: 0 !important; padding-right: 0 !important; }
+
     /* -- Padding general de páginas -- */
     .v3-page-content { padding: 0.75rem 1rem 4rem !important; }
 }
@@ -1100,4 +1124,78 @@
 
     /* -- Perfil: campos Nombre/Apellido y Contraseñas → columna única -- */
     #profileNamesGrid, #profilePassGrid { grid-template-columns: 1fr !important; }
+}
+/* ===============================================================
+   CLASES UTILITARIAS - GRIDS ADMIN RESPONSIVE
+   =============================================================== */
+.admin-grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+.admin-grid-3col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+.admin-grid-4col { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+
+@media (max-width: 1023px) {
+    .admin-grid-4col { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+    .admin-grid-2col { grid-template-columns: 1fr; }
+    .admin-grid-3col { grid-template-columns: 1fr; }
+    .admin-grid-4col { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) {
+    .admin-grid-4col { grid-template-columns: 1fr; }
+}
+
+/* ===============================================================
+   TOPNAV ADMIN - Nav pills scrollable en pantallas medias
+   =============================================================== */
+@media (max-width: 1280px) {
+    .v3-nav-pills {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        max-width: 55vw;
+    }
+    .v3-nav-pills::-webkit-scrollbar { display: none; }
+    .v3-nav-pill { font-size: 0.78rem; padding: 4px 7px; gap: 4px; }
+    .v3-nav-pill i { font-size: 0.95rem; }
+}
+
+/* ===============================================================
+   TABLAS - Card mode en movil (clase .table-card-mode)
+   =============================================================== */
+@media (max-width: 640px) {
+    .table-card-mode thead { display: none; }
+    .table-card-mode tbody tr {
+        display: block;
+        background: white;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        margin-bottom: 0.75rem;
+        padding: 0.75rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .table-card-mode tbody td {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid #f3f4f6;
+        padding: 0.5rem 0;
+        font-size: 0.875rem;
+        white-space: normal;
+        width: auto !important;
+    }
+    .table-card-mode tbody td:last-child {
+        border-bottom: none;
+        justify-content: flex-end;
+        gap: 0.5rem;
+    }
+    .table-card-mode tbody td[data-label]::before {
+        content: attr(data-label);
+        font-weight: 700;
+        color: #6b7280;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        flex-shrink: 0;
+        margin-right: 0.5rem;
+    }
 }

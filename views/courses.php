@@ -90,7 +90,17 @@ function parseRoles($rolesString) {
 }
 ?>
 
-<div style="max-width: 1600px; margin: 0 auto; padding: 2rem; padding-bottom: 8rem; animation: fadeIn 0.7s ease-out;">
+<style>
+.courses-outer { max-width: 1600px; margin: 0 auto; padding: 2rem; padding-bottom: 8rem; animation: fadeIn 0.7s ease-out; }
+.courses-cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr)); gap:1.5rem; padding:1.5rem; background:#f8fafc; }
+@media(max-width:768px) {
+    .courses-outer { padding: 1rem; padding-bottom: 6rem; }
+    .courses-cards-grid { grid-template-columns:1fr; gap:1rem; padding:1rem; }
+}
+@keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+</style>
+
+<div class="courses-outer">
 
 
     <?php if ($successMsg): ?>
@@ -104,8 +114,8 @@ function parseRoles($rolesString) {
         </div>
     <?php endif; ?>
 
-    <main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: hidden; border: 1px solid rgba(0,0,0,0.04);">
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1.5rem; padding: 1.5rem; background: #f8fafc;">
+    <main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: visible; border: 1px solid rgba(0,0,0,0.04);">
+        <div class="courses-cards-grid">
             <!-- Add-Card para nuevo curso -->
             <div onclick="openModal('modalCreateCourse')" style="border: 2px dashed #cbd5e1; border-radius: 16px; background: transparent; cursor: pointer; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #64748b; transition: all 0.2s; min-height: 250px;" onmouseover="this.style.borderColor='#6366f1'; this.style.color='#4f46e5'; this.style.background='#eef2ff'; this.style.transform='translateY(-3px)';" onmouseout="this.style.borderColor='#cbd5e1'; this.style.color='#64748b'; this.style.background='transparent'; this.style.transform='translateY(0)';">
                 <i class='bx bx-plus' style="font-size: 3.5rem; margin-bottom: 0.5rem; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'"></i>

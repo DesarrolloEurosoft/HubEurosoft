@@ -133,15 +133,28 @@ foreach ($learningPaths as $lp) {
 }
 ?>
 
-<div style="max-width: 1600px; margin: 0 auto; padding: 2rem; padding-bottom: 8rem; animation: fadeIn 0.7s ease-out;">
-    <header style="margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; display: flex; justify-content: space-between; align-items: flex-end;">
+<style>
+.lp-outer { max-width: 1600px; margin: 0 auto; padding: 2rem; padding-bottom: 8rem; animation: fadeIn 0.7s ease-out; }
+.lp-page-header { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:2rem; border-bottom:1px solid var(--border); padding-bottom:1rem; }
+@media(max-width:768px) {
+    .lp-outer { padding: 1rem; padding-bottom: 6rem; }
+    .lp-page-header { flex-direction:column; align-items:flex-start; gap:1rem; }
+    .lp-page-header > div { width:100%; }
+    .lp-page-header .btn { width:100%; justify-content:center; border-radius:12px; box-sizing:border-box; }
+    .lp-page-header p { font-size:0.85rem; }
+    .lp-page-header h1 { font-size:1.5rem !important; }
+}
+</style>
+
+<div class="lp-outer">
+    <header class="lp-page-header">
         <div>
             <h1 style="font-size: 2rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem;">Rutas de Aprendizaje</h1>
             <p style="color: var(--text-muted); font-size: 0.95rem;">Crea programas secuenciales de estudio y asígnalos masivamente a los roles de la empresa.</p>
         </div>
         <div>
-            <button class="btn btn-primary" onclick="openModal('modalCreatePath')" style="padding: 0.6rem 1.2rem; border-radius: 12px; font-weight: 700; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3);">
-                + Nueva Ruta
+            <button class="btn btn-primary" onclick="openModal('modalCreatePath')" style="padding: 0.6rem 1.2rem; border-radius: 12px; font-weight: 700; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3); white-space:nowrap; display:inline-flex; align-items:center; gap:0.4rem;">
+                <i class='bx bx-plus'></i> Nueva Ruta
             </button>
         </div>
     </header>
@@ -160,7 +173,12 @@ foreach ($learningPaths as $lp) {
                 <p style="color: #94a3b8;">Usa el botón superior para diseñar tu primera secuencia de cursos.</p>
             </div>
         <?php else: ?>
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1.5rem; padding: 1.5rem; background: #f8fafc;">
+    <style>
+    .lp-cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr)); gap:1.5rem; padding:1.5rem; background:#f8fafc; }
+    .lp-modal-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:1.5rem; }
+    @media(max-width:768px){ .lp-cards-grid { grid-template-columns:1fr; gap:1rem; } .lp-modal-grid { grid-template-columns:1fr; } }
+    </style>
+            <div class="lp-cards-grid">
                 <?php foreach ($learningPaths as $path): ?>
                     <div style="background: white; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; padding: 1.5rem; display: flex; flex-direction: column; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 10px 25px -5px rgba(0, 0, 0, 0.1)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px -1px rgba(0, 0, 0, 0.05)';">
                         
@@ -289,7 +307,7 @@ foreach ($learningPaths as $lp) {
             <input type="hidden" name="action" value="edit_learning_path">
             <input type="hidden" name="learning_path_id" id="edit_lp_id" value="">
             
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+            <div class="lp-modal-grid">
                 <div>
                     <div class="form-group" style="margin-bottom: 1rem;">
                         <label class="form-label" style="font-weight: 700; color: #374151;">Nombre de la Ruta</label>

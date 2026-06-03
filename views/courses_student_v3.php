@@ -39,10 +39,11 @@ function getStatusCfg($status) {
                     <i class='bx bx-search' style="position:absolute;left:16px;top:50%;transform:translateY(-50%);color:#9ca3af;"></i>
                     <input type="text" id="v3SearchInput" placeholder="Buscar cursos..." oninput="v3ApplyFilters()" style="width:100%;padding:10px 16px 10px 44px;background:#f9fafb;border-radius:999px;border:1px solid #e5e7eb;color:#111827;font-size:0.875rem;outline:none;" onfocus="this.style.boxShadow='0 0 0 2px #FF6A00';this.style.borderColor='#FF6A00'" onblur="this.style.boxShadow='none';this.style.borderColor='#e5e7eb'">
                 </div>
-                <div style="display:flex;align-items:center;gap:4px;background:#f3f4f6;border-radius:999px;padding:4px;">
+                <div class="v3-view-toggle" style="display:flex;align-items:center;gap:4px;background:#f3f4f6;border-radius:999px;padding:4px;">
                     <button id="v3BtnGrid" onclick="v3SetView('grid')" style="padding:8px;border-radius:50%;border:none;cursor:pointer;background:#FF6A00;color:white;box-shadow:0 1px 3px rgba(0,0,0,0.1);display:flex;align-items:center;justify-content:center;"><i class='bx bx-grid-alt'></i></button>
                     <button id="v3BtnList" onclick="v3SetView('list')" style="padding:8px;border-radius:50%;border:none;cursor:pointer;background:transparent;color:#6b7280;display:flex;align-items:center;justify-content:center;"><i class='bx bx-list-ul'></i></button>
                 </div>
+
             </div>
         </div>
     </div>

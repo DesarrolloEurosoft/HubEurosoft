@@ -372,7 +372,27 @@ function timeAgoStr($datetime) {
         .medal-progress-ct { background: #ffffff; padding: 2rem; border-radius: var(--border-rad); box-shadow: 0 10px 30px -5px rgba(0,0,0,0.04); margin-top: 1rem; border: 1px solid #f8fafc;}
         .med-bar-bg { width: 100%; height: 16px; background: #e2e8f0; border-radius: 20px; position: relative; }
         .med-bar-fill { height: 100%; background: linear-gradient(to right, #f97316, #fcd34d); border-radius: 20px; box-shadow: 0 2px 6px rgba(249, 115, 22, 0.5); position: relative; }
+
+        /* ─── Mobile ≤ 768px ─── */
+        @media(max-width: 768px) {
+            .container { padding: 0 1rem; }
+            .header-left h1 { font-size: 1.45rem; }
+            .header-chips { gap: 0.4rem; }
+            .chip { font-size: 0.72rem; padding: 0.32rem 0.6rem; gap: 0.35rem; }
+            .chip-val { width: 20px; height: 20px; font-size: 0.72rem; }
+            .header-area { flex-direction: column; align-items: flex-start; gap: 1rem; }
+            .header-right { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+            .stat-card { flex-direction: column; align-items: center; text-align: center; gap: 0.3rem; padding: 0.75rem 0.5rem; }
+            .stat-card i { font-size: 1.2rem; }
+            .stat-card .val { font-size: 1rem; }
+            .stat-card .lbl { font-size: 0.62rem; line-height: 1.2; }
+            .main-grid { gap: 1rem; }
+            .grid-3 { gap: 1rem; }
+            .medals-grid { gap: 1rem; }
+            .b-card { padding: 1.2rem; }
+        }
     </style>
+
 </head>
 <body>
 

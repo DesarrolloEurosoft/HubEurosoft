@@ -149,7 +149,7 @@ $podiumColors = [
 $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc'];
 ?>
 
-<div style="max-width:1920px;margin:0 auto;padding:1rem 1.5rem 2rem;">
+<div class="rank-page-wrap" style="max-width:1920px;margin:0 auto;padding:1rem 1.5rem 2rem;">
 <h1 style="font-size:1.75rem;font-weight:700;color:#111827;margin:0 0 1.5rem 0;"><?= htmlspecialchars($rankingTitle) ?></h1>
 
 <!-- ════════════════════════════════════════════════════════════════════════════
@@ -393,7 +393,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
     <div style="background:white;border-radius:1rem;border:1px solid #f3f4f6;overflow:hidden;">
         <div style="padding:1.25rem;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center;">
             <div><h2 style="font-size:1.25rem;font-weight:700;color:#111827;margin:0;">Clasificación General</h2><p style="font-size:0.875rem;color:#6b7280;margin:0;">Posiciones del 4 en adelante · Toda la empresa</p></div>
-            <div style="position:relative;width:200px;"><i class='bx bx-search' style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9ca3af;"></i><input type="text" id="rankSearchGeneral" placeholder="Filtrar..." oninput="filterRanking('general')" style="width:100%;padding:8px 12px 8px 36px;background:#f9fafb;border-radius:999px;border:1px solid #e5e7eb;font-size:0.875rem;outline:none;box-sizing:border-box;" onfocus="this.style.boxShadow='0 0 0 2px #FF6A00'" onblur="this.style.boxShadow='none'"></div>
+            <div class="rank-search-wrap" style="position:relative;width:200px;"><i class='bx bx-search' style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9ca3af;"></i><input type="text" id="rankSearchGeneral" placeholder="Filtrar..." oninput="filterRanking('general')" style="width:100%;padding:8px 12px 8px 36px;background:#f9fafb;border-radius:999px;border:1px solid #e5e7eb;font-size:0.875rem;outline:none;box-sizing:border-box;" onfocus="this.style.boxShadow='0 0 0 2px #FF6A00'" onblur="this.style.boxShadow='none'"></div>
         </div>
         <?php $restGen=array_slice($usersGeneral,3); if(empty($restGen)):?>
         <div style="padding:3rem;text-align:center;"><i class='bx bx-trophy' style="font-size:2rem;color:#e5e7eb;display:block;margin-bottom:12px;"></i><p style="font-weight:600;color:#6b7280;">No hay más participantes</p></div>
@@ -422,7 +422,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
     <div style="background:white;border-radius:1rem;border:1px solid #f3f4f6;overflow:hidden;">
         <div style="padding:1.25rem;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center;">
             <div><h2 style="font-size:1.25rem;font-weight:700;color:#111827;margin:0;">Clasificación — <?=htmlspecialchars($buName)?></h2><p style="font-size:0.875rem;color:#6b7280;margin:0;">Posiciones del 4 en adelante · Tu unidad</p></div>
-            <div style="position:relative;width:200px;"><i class='bx bx-search' style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9ca3af;"></i><input type="text" id="rankSearchTeam" placeholder="Filtrar..." oninput="filterRanking('team')" style="width:100%;padding:8px 12px 8px 36px;background:#f9fafb;border-radius:999px;border:1px solid #e5e7eb;font-size:0.875rem;outline:none;box-sizing:border-box;" onfocus="this.style.boxShadow='0 0 0 2px #FF6A00'" onblur="this.style.boxShadow='none'"></div>
+            <div class="rank-search-wrap" style="position:relative;width:200px;"><i class='bx bx-search' style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9ca3af;"></i><input type="text" id="rankSearchTeam" placeholder="Filtrar..." oninput="filterRanking('team')" style="width:100%;padding:8px 12px 8px 36px;background:#f9fafb;border-radius:999px;border:1px solid #e5e7eb;font-size:0.875rem;outline:none;box-sizing:border-box;" onfocus="this.style.boxShadow='0 0 0 2px #FF6A00'" onblur="this.style.boxShadow='none'"></div>
         </div>
         <?php $restTeam=array_slice($usersTeam,3); if(empty($restTeam)):?>
         <div style="padding:3rem;text-align:center;"><i class='bx bx-trophy' style="font-size:2rem;color:#e5e7eb;display:block;margin-bottom:12px;"></i><p style="font-weight:600;color:#6b7280;">No hay más participantes en tu equipo</p></div>

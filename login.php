@@ -439,11 +439,26 @@ $displayBU = htmlspecialchars(urldecode($buQuery));
             text-align: center;
             font-weight: 500;
         }
+
+        /* ── Móvil ≤ 480px ── */
+        @media (max-width: 480px) {
+            body {
+                padding: 1.5rem 1rem;
+            }
+            .auth-card {
+                padding: 1.75rem 1.25rem;
+                border-radius: 14px;
+                margin-top: 1.5rem !important;
+            }
+            .auth-header h2 { font-size: 1.35rem; }
+            .options-row { flex-wrap: wrap; gap: 0.5rem; }
+            .footer-text { margin-top: 1.5rem; }
+        }
     </style>
 </head>
 <body>
 
-    <div style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:420px;">
+    <div style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:420px;padding:0 1rem;box-sizing:border-box;">
     <!-- Fallback Logo / Actual Logo -->
     <div class="brand-logo" style="width:100%;">
         <img src="assets/images/logo.png" alt="Hub Eurosoft" onerror="this.outerHTML='<h1 style=\'color:#1a1d2e; font-weight:900; font-size: 2.5rem; letter-spacing:-0.03em;\'><i class=\'bx bxs-graduation\' style=\'color:#f97316;\'></i> Hub<span style=\'color:#f97316;\'>Eurosoft</span></h1>'">

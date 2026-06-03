@@ -210,12 +210,7 @@ if ($sessionUserId && isset($pdo)) {
             </a>
         <?php endforeach; ?>
         
-        <?php if ($isAdminNav): ?>
-            <a href="index.php?view=activity_log" class="v3-mobile-nav-item <?= ($currentView === 'activity_log') ? 'active' : '' ?>">
-                <i class='bx bx-receipt' style="font-size: 1.2rem;"></i>
-                Bitácora de Accesos
-            </a>
-        <?php endif; ?>
+
         
         <div style="margin-top: auto; padding-top: 1rem; border-top: 1px solid #f3f4f6;">
             <a href="logout.php" class="v3-mobile-nav-item" style="color: #ef4444;">

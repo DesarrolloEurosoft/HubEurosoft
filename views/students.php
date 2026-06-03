@@ -551,13 +551,13 @@ try {
     </div>
 </div>
 
-<main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: hidden; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 2rem;">
-    <div style="background: white; overflow: hidden; border-radius: 24px;">
+<main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: visible; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 2rem;">
+    <div style="background: white; overflow: visible; border-radius: 24px;">
     <div class="table-responsive" style="margin: 0; border: none;">
-        <table class="data-table">
+        <table class="data-table table-card-mode">
             <thead>
                 <tr>
-                    <th style="width:40px; text-align:center;">
+                    <th class="col-hide-mobile" style="width:40px; text-align:center;">
                         <input type="checkbox" id="selectAllUsers" onchange="toggleSelectAll(this)" title="Seleccionar todos" style="width:16px;height:16px;cursor:pointer;">
                     </th>
                     <th>Nombre y Contacto</th>
@@ -572,10 +572,10 @@ try {
                 <?php if (count($users) > 0): ?>
                     <?php foreach ($users as $user): ?>
                         <tr data-company="<?= htmlspecialchars(strtolower($user['companyName'] ?? '')) ?>" data-bu="<?= htmlspecialchars(strtolower($user['buName'] ?? '')) ?>" data-nickname="<?= htmlspecialchars(strtolower($user['nickname'] ?? '')) ?>">
-                            <td style="text-align:center; padding: 0.5rem;">
+                            <td class="col-hide-mobile" style="text-align:center; padding: 0.5rem;">
                                 <input type="checkbox" name="user_ids[]" value="<?= htmlspecialchars($user['id']) ?>" class="user-row-check" onchange="updateBulkBar()" style="width:16px;height:16px;cursor:pointer;">
                             </td>
-                            <td>
+                            <td data-label="Nombre">
                                 <div style="font-weight: 500; color: var(--text-main);">
                                     <?= htmlspecialchars($user['name'] ?: 'Desconocido') ?>
                                 </div>
@@ -586,7 +586,7 @@ try {
                                     <?php endif; ?>
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Compañía">
                                 <?php if($user['companyName']): ?>
                                     <div style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(59, 130, 246, 0.1); color: #3b82f6; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem;">
                                         <i class='bx bx-buildings'></i> <?= htmlspecialchars($user['companyName']) ?>
@@ -595,7 +595,7 @@ try {
                                     <span style="color: #9ca3af; font-size: 0.85rem;">Independiente</span>
                                 <?php endif; ?>
                             </td>
-                            <td>
+                            <td data-label="Unidad">
                                 <?php if($user['buName']): ?>
                                     <div style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem;">
                                         <i class='bx bx-store-alt'></i> <?= htmlspecialchars($user['buName']) ?>
@@ -604,7 +604,7 @@ try {
                                     <span style="color: #9ca3af; font-size: 0.85rem;">X</span>
                                 <?php endif; ?>
                             </td>
-                            <td>
+                            <td data-label="Rol Formativo">
                                 <?php if($user['trainingRolesNames']): ?>
                                     <div style="display: inline-flex; flex-wrap: wrap; gap: 0.3rem;">
                                         <?php foreach(explode(', ', $user['trainingRolesNames']) as $trn): ?>
@@ -617,7 +617,7 @@ try {
                                     <span style="color: #9ca3af; font-size: 0.85rem;">Sin Perfil</span>
                                 <?php endif; ?>
                             </td>
-                            <td>
+                            <td data-label="Rol App">
                                 <?php 
                                     $mapRoles = [
                                         'ADMIN' => ['Admin', '#fce7f3', '#9d174d'],
