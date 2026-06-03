@@ -215,20 +215,40 @@ if ($isLectorOp) {
 ?>
 
 <!-- ═══ WELCOME SECTION (exact from page.tsx:238-284) ═══ -->
-<div style="max-width:1920px;margin:0 auto;padding:1rem 1.5rem;">
+<style>
+    .dash-kpi-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+    .dash-bento-grid { display: grid; grid-template-columns: 3fr 9fr; gap: 1.25rem; }
+    .dash-top-row-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+    
+    @media (max-width: 1023px) {
+        .dash-bento-grid { grid-template-columns: 1fr; }
+        .dash-top-row-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── Móvil ≤ 768px ── */
+    @media (max-width: 768px) {
+        .dash-outer-wrap  { padding: 1rem 1rem !important; }
+        .dash-stats-outer { flex-direction: column !important; align-items: flex-start !important; gap: 0.75rem !important; }
+        .dash-pills-row   { width: 100%; flex-wrap: wrap; gap: 0.5rem !important; overflow-x: visible; }
+        .dash-kpi-grid    { width: 100%; gap: 0.5rem; }
+        .dash-bento-grid  { gap: 0.75rem; }
+        h1.dash-title     { font-size: 1.45rem !important; margin-bottom: 0.75rem !important; }
+    }
+</style>
+<div class="dash-outer-wrap" style="max-width:1920px;margin:0 auto;padding:1rem 1.5rem;">
 
     <!-- Welcome heading -->
     <div style="margin-bottom:1.5rem;">
-        <h1 style="font-size:1.75rem;font-weight:700;color:#111827;margin:0 0 1rem 0;">
+    <h1 class="dash-title" style="font-size:1.75rem;font-weight:700;color:#111827;margin:0 0 1rem 0;">
             Bienvenido, <?= htmlspecialchars($firstName ?: 'Estudiante') ?>
         </h1>
 
-        <!-- StatPills + KPI Cards row (flex-row from md) -->
-        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:0.75rem 1.5rem;">
+        <!-- StatPills + KPI Cards row -->
+        <div class="dash-stats-outer" style="display:flex;flex-wrap:wrap;align-items:center;gap:0.75rem 1.5rem;">
             
             <?php if (!$isLectorOp): ?>
             <!-- StatPills -->
-            <div style="display:flex;align-items:center;gap:0.75rem;overflow-x:auto;">
+            <div class="dash-pills-row" style="display:flex;align-items:center;gap:0.75rem;overflow-x:auto;">
                 <!-- Cursos Activos: bg-gray-900 text-white -->
                 <div style="display:flex;align-items:center;gap:0.75rem;flex-shrink:0;">
                     <div style="background:#111827;color:white;padding:6px 16px;border-radius:999px;font-size:0.875rem;font-weight:600;"><?= count($sd['activeCourses']) ?></div>
@@ -251,7 +271,7 @@ if ($isLectorOp) {
 
             <?php if (!$isLectorOp): ?>
             <!-- KPI Cards -->
-            <div style="display:grid;grid-template-columns:repeat(3,auto);gap:0.75rem;">
+            <div class="dash-kpi-grid">
                 <div style="background:white;border-radius:1rem;padding:0.75rem 1rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
                     <div style="display:flex;align-items:center;gap:0.75rem;">
                         <i class='bx bxs-hot' style="color:#FF6A00;font-size:1.25rem;"></i>
@@ -285,7 +305,7 @@ if ($isLectorOp) {
     </div>
 
     <!-- ═══ BENTO GRID 3-9 layout (exact from page.tsx:287) ═══ -->
-    <div class="lo-dashboard-grid">
+    <div class="dash-bento-grid">
 
         <!-- === LEFT COLUMN (3 cols) === -->
         <div style="display:flex;flex-direction:column;gap:1.25rem;">

@@ -90,12 +90,21 @@ try {
 }
 ?>
 
-<div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
+<style>
+.roles-page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; }
+@media(max-width:768px) {
+    .roles-page-header { flex-direction:column; align-items:flex-start; gap:1rem; }
+    .roles-page-header .btn { width:100%; justify-content:center; }
+    .roles-page-header p { font-size: 0.85rem; }
+}
+</style>
+
+<div class="roles-page-header">
     <div>
         <h2>Roles de Entrenamiento</h2>
         <p>Los perfiles formativos controlan qué empleados tienen acceso a qué rutas o grupos de cursos cerrados.</p>
     </div>
-    <button class="btn btn-primary" onclick="openModal('modalCreate')">
+    <button class="btn btn-primary" onclick="openModal('modalCreate')" style="white-space:nowrap; display:inline-flex; align-items:center; gap:0.4rem; padding:0.6rem 1.2rem; border-radius:12px; font-weight:700; box-shadow:0 4px 14px rgba(255,106,0,0.35);">
         <i class='bx bx-plus'></i> Nuevo Rol
     </button>
 </div>
@@ -104,9 +113,9 @@ try {
 <?php if ($errorMsg): ?><div class="alert alert-error"><?= htmlspecialchars($errorMsg) ?></div><?php endif; ?>
 <?php if (isset($dbError)): ?><div class="alert alert-error"><?= htmlspecialchars($dbError) ?></div><?php endif; ?>
 
-<div class="card" style="padding: 0; overflow: hidden;">
+<div class="card" style="padding: 0; overflow: visible;">
     <div class="table-responsive">
-        <table class="data-table">
+        <table class="data-table table-card-mode">
             <thead>
                 <tr>
                     <th>Nombre del Perfil</th>
@@ -120,23 +129,23 @@ try {
                 <?php if (count($roles) > 0): ?>
                     <?php foreach ($roles as $role): ?>
                         <tr>
-                            <td>
+                            <td data-label="Perfil">
                                 <div style="font-weight: 500; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem;">
                                     <i class='bx bx-briefcase-alt-2' style="color: var(--primary);"></i>
                                     <?= htmlspecialchars($role['name']) ?>
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Usuarios">
                                 <div style="display: flex; align-items: center; justify-content: center; gap: 0.3rem; color: var(--text-muted); font-size: 0.9rem;">
                                     <?= htmlspecialchars($role['userCount']) ?> <i class='bx bx-group'></i>
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Cursos">
                                 <div style="display: flex; align-items: center; justify-content: center; gap: 0.3rem; color: var(--text-muted); font-size: 0.9rem;">
                                     <?= htmlspecialchars($role['courseCount']) ?> <i class='bx bx-book-open'></i>
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Creado">
                                 <?= date('d/M/Y', strtotime($role['createdAt'])) ?>
                             </td>
                             <td style="text-align: right; display: flex; justify-content: flex-end; gap: 0.3rem;">

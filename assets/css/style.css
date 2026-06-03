@@ -1,4 +1,4 @@
-﻿:root {
+:root {
     --primary: #f97316; /* Naranja corporativo oscuro */
     --primary-hover: #ea580c;
     --bg-color: #eef2f6; /* Fondo de Dashboard Light */
@@ -232,7 +232,7 @@ p { color: var(--text-muted); }
 /* Tarjetas (Cards) */
 .card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
     gap: 1.5rem;
 }
 .card {
@@ -333,20 +333,83 @@ p { color: var(--text-muted); }
 }
 
 /* =============================================
-   Responsive
+   Responsive — Móvil ≤ 768px
 ============================================= */
 @media (max-width: 768px) {
+    /* Sidebar: drawer lateral */
     .sidebar {
         position: fixed;
         left: -100%;
         top: 0;
         bottom: 0;
         box-shadow: var(--shadow-lg);
+        z-index: 200;
     }
     .sidebar.open { left: 0; }
     .menu-toggle { display: block; }
     .top-header { padding: 0 1rem; }
-    .page-content { padding: 1.5rem 1rem; }
+    .page-content { padding: 1rem; }
+
+    /* Cards: una columna */
+    .card-grid { grid-template-columns: 1fr; }
+    .card { padding: 1rem; }
+
+    /* Card header: apilar cuando no cabe en línea */
+    .card > div[style*="justify-content: space-between"],
+    .card > div[style*="justify-content:space-between"] {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.75rem !important;
+    }
+
+    /* Filtros: wrap en móvil */
+    .card > div[style*="display: flex"],
+    .card > div[style*="display:flex"] { flex-wrap: wrap !important; }
+
+    /* two-cols → 1 columna */
+    .two-cols { grid-template-columns: 1fr !important; }
+
+    /* Modales: full-width, emerge desde abajo */
+    .modal-overlay {
+        padding: 0;
+        align-items: flex-end;
+    }
+    .modal-content {
+        max-width: 100% !important;
+        width: 100% !important;
+        max-height: 92vh;
+        border-radius: 16px 16px 0 0;
+        padding: 1.25rem 1rem;
+        margin: 0;
+    }
+
+    /* Botones de acción: no cortar */
+    .btn { font-size: 0.85rem; padding: 0.5rem 0.9rem; }
+
+    /* Ajuste padding de página global */
+    .v3-page-content { padding: 0.75rem 0.75rem 5rem !important; }
+
+    /* Ocultar columnas secundarias en tablas (marcarlas con .col-hide-mobile) */
+    .col-hide-mobile { display: none !important; }
+}
+
+/* =============================================
+   Responsive — Tablet 769px – 1023px
+============================================= */
+@media (min-width: 769px) and (max-width: 1023px) {
+    .card-grid { grid-template-columns: repeat(2, 1fr); }
+    .modal-content { max-width: 600px !important; }
+    .v3-page-content { padding: 0.75rem 1.25rem 2rem !important; }
+}
+
+/* =============================================
+   Responsive — Móvil pequeño ≤ 480px
+============================================= */
+@media (max-width: 480px) {
+    .modal-content { padding: 1rem; border-radius: 12px 12px 0 0; }
+    .modal-title { font-size: 1rem; }
+    .form-group { margin-bottom: 1rem; }
+    .form-control { font-size: 0.95rem; }
 }
 
 /* =============================================
@@ -355,6 +418,7 @@ p { color: var(--text-muted); }
 .table-responsive {
     width: 100%;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 .data-table {
     width: 100%;
@@ -441,5 +505,65 @@ p { color: var(--text-muted); }
     }
     .data-table td i {
         font-size: 1.15rem !important;
+    }
+}
+
+/* =============================================
+   Table Card Mode — Tablas como tarjetas en móvil
+   Uso: añadir clase 'table-card-mode' a la <table>
+   y atributo data-label="Columna" a cada <td>
+============================================= */
+@media (max-width: 768px) {
+    .table-card-mode thead {
+        display: none;
+    }
+    .table-card-mode,
+    .table-card-mode tbody,
+    .table-card-mode tr {
+        display: block;
+        width: 100%;
+    }
+    .table-card-mode tr {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 1rem;
+        margin-bottom: 0.875rem;
+        background: var(--surface);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .table-card-mode td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.45rem 0;
+        border-bottom: 1px dashed var(--border);
+        font-size: 0.875rem;
+        min-height: 36px;
+        gap: 0.5rem;
+    }
+    .table-card-mode td:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+    .table-card-mode td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        min-width: 80px;
+        flex-shrink: 0;
+    }
+    .table-card-mode td:last-child::before {
+        display: none;
+    }
+    /* Prevenir que el wrapper de tabla scrollee horizontalmente */
+    .table-card-mode.data-table th,
+    .table-card-mode.data-table td {
+        white-space: normal;
     }
 }

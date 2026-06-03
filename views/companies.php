@@ -133,7 +133,12 @@ try {
 </script>
 
 <style>
-    .company-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+    .company-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+    @media (max-width: 768px) {
+        .company-grid { grid-template-columns: 1fr; gap: 1rem; }
+        .cc-header-row { flex-wrap: wrap !important; gap: 0.5rem !important; }
+        .cc-badge-wrap { width: 100%; text-align: right; }
+    }
     .company-card { background: var(--surface); border-radius: 16px; border: 1px solid var(--border); box-shadow: var(--shadow-md); padding: 1.5rem; display: flex; flex-direction: column; position: relative; }
     .cc-actions { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1rem; }
     .cc-metrics { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
@@ -149,8 +154,8 @@ try {
     .create-card span { font-size: 1.1rem; font-weight: 800; letter-spacing: -0.01em; }
 </style>
 
-<div style="width: 85%; max-width: 1920px; margin: 0 auto; padding: 1rem 0;">
-<main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: hidden; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 2rem;">
+<div style="width: min(95%, 1920px); margin: 0 auto; padding: 1rem 0;">
+<main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: visible; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 2rem;">
     <div class="company-grid" style="padding: 1.5rem; background: #f8fafc; margin-bottom: 0;">
         <!-- Add-Card para crear nuevo -->
     <div class="company-card create-card" onclick="openModal('modalCreate')">
@@ -162,7 +167,7 @@ try {
         <?php foreach ($companies as $comp): ?>
             <div class="company-card">
                 <!-- Header -->
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem;">
+                <div class="cc-header-row" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem;">
                     <div style="display: flex; align-items: center; gap: 1rem;">
                         <div style="width: 72px; height: 72px; border-radius: 12px; background: rgba(59, 130, 246, 0.1); color: #3b82f6; display: flex; justify-content: center; align-items: center; font-size: 2.2rem; overflow: hidden; flex-shrink: 0; border: 1px solid var(--border);">
                             <?php if (!empty($comp['logoPath'])): ?>
@@ -175,11 +180,11 @@ try {
                             <h3 style="margin: 0; font-size: 1.35rem; font-weight: 800; color: var(--text-main); line-height: 1.2;"><?= htmlspecialchars($comp['name']) ?></h3>
                         </div>
                     </div>
-                    <div>
+                    <div class="cc-badge-wrap" style="flex-shrink: 0;">
                         <?php if($comp['isActive']): ?>
-                            <span style="background: #dcfce7; color: #166534; padding: 0.3rem 0.8rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700;">Activo</span>
+                            <span style="background: #dcfce7; color: #166534; padding: 0.3rem 0.8rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; white-space: nowrap;">Activo</span>
                         <?php else: ?>
-                            <span style="background: #fee2e2; color: #991b1b; padding: 0.3rem 0.8rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700;">Inactivo</span>
+                            <span style="background: #fee2e2; color: #991b1b; padding: 0.3rem 0.8rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; white-space: nowrap;">Inactivo</span>
                         <?php endif; ?>
                     </div>
                 </div>

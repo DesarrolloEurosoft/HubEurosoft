@@ -415,13 +415,13 @@ if ($qUserId) {
 
 ?>
 <style>
-    .stats-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .stats-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 1rem; margin-bottom: 2rem; }
     .kpi-card { background: white; border-radius: 12px; border: 1px solid #f3f4f6; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04); padding: 1.2rem; display: flex; align-items: center; justify-content: space-between; transition: transform 0.3s ease, box-shadow 0.3s ease; }
     .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); }
     .kpi-label { font-size: 0.75rem; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
     .kpi-val { font-size: 1.8rem; font-weight: 900; color: #1f2937; }
     
-    .stats-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 1.5rem; }
+    .stats-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 1.5rem; }
     .s-card { background: white; border-radius: 16px; border: 1px solid #f3f4f6; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04); padding: 1.25rem; display: flex; flex-direction: column; gap: 1.25rem; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); text-decoration: none; color: inherit; }
     .s-card.hoverable:hover { box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); transform: translateY(-4px); }
     
@@ -446,6 +446,20 @@ if ($qUserId) {
     .bg-gray { background-color: #9ca3af; }
     .bg-amber { background-color: #d97706; }
     .bg-indigo { background-color: #818cf8; }
+
+    /* Grid 2 columnas para Roles + Engagement */
+    .kpi-extras-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem; }
+
+    @media(max-width: 768px) {
+        .stats-kpi-grid  { grid-template-columns: 1fr 1fr; }
+        .stats-card-grid { grid-template-columns: 1fr !important; }
+        .kpi-extras-grid { grid-template-columns: 1fr; }
+        .kpi-val         { font-size: 1.4rem; }
+        .s-card          { padding: 1rem; gap: 1rem; }
+        .sc-metrics      { gap: 0.3rem; }
+        .scm-val         { font-size: 0.95rem; }
+        .scm-lbl         { font-size: 0.6rem; }
+    }
 </style>
 
 <div style="padding: 1rem 0;">
@@ -507,7 +521,7 @@ if ($qUserId) {
     </div>
 
     <?php if ($showKpiExtras): ?>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem;">
+    <div class="kpi-extras-grid">
 
         <!-- Roles Críticos -->
         <?php if (!empty($criticalRolesData)): ?>

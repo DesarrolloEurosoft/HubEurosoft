@@ -733,6 +733,143 @@ else:
 <div class="ft-main-grid">
 <!-- ── MAIN COLUMN ── -->
 <div>
+<?php if ($isLectorOp): ?>
+<!-- CHAT VIEW FOR FORUM TOPIC -->
+<div style="background:<?= $forumLightBg ?>; border-radius: 1.5rem; border: 1px solid <?= $forumLightBorder ?>; padding: 1rem 1rem 80px 1rem; margin-bottom: 1.25rem;">
+    
+    <!-- Original Topic as first message -->
+    <div style="display: flex; flex-direction: column; align-items: flex-start; margin-bottom: 1rem;">
+        <div style="background: white; padding: 1rem 1.25rem; border-radius: 0 16px 16px 16px; max-width: 90%; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #f3f4f6;">
+            <div style="font-size: 0.8rem; font-weight: 700; color: #FF6A00; margin-bottom: 4px; display:flex; align-items:center; gap:0.5rem; flex-wrap: wrap;">
+                <?= htmlspecialchars($topic['authorName']) ?> <?= getRoleBadge($topic['authorRole']) ?>
+            </div>
+            <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap: wrap; margin-bottom: 6px;">
+                <div style="font-weight: 800; font-size: 1.15rem; color: #111827;">
+                    <?= htmlspecialchars($topic['title']) ?>
+                </div>
+                <?php if ($topic['isPinned']): ?><span style="background:#fff7ed;color:#FF6A00;font-size:0.65rem;padding:2px 8px;border-radius:999px;"><i class='bx bxs-pin'></i> Fijado</span><?php endif; ?>
+                <?php if ($topic['isValidatedPractice'] ?? 0): ?><span style="background:#fef08a;color:#854d0e;font-size:0.65rem;font-weight:800;padding:2px 10px;border-radius:999px;"><i class='bx bxs-medal'></i> Buena Práctica</span><?php endif; ?>
+            </div>
+            <div style="font-size: 0.95rem; color: #374151; white-space: pre-wrap; margin-bottom: 8px;">
+                <?= htmlspecialchars($topic['content']) ?>
+            </div>
+            <div style="display:flex; justify-content:flex-end; align-items:center; gap:1rem;">
+                <?php if (($isAdmin||$isCoLeader||$isBuLeader) && !($topic['isValidatedPractice']??0) && $topic['authorId']!==$userId): ?>
+                <button onclick="moderateAction('mark_practice','<?= $topicId ?>')" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:0.5rem;padding:0.25rem 0.6rem;font-size:0.7rem;cursor:pointer;font-weight:700;"><i class='bx bx-check-shield'></i> Aprobar</button>
+                <?php endif; ?>
+                <?php if ($canModerate): ?>
+                <form method="POST" onsubmit="return confirm('¿Borrar todo el tema y sus respuestas?');" style="margin:0;">
+                    <input type="hidden" name="action" value="delete_topic">
+                    <input type="hidden" name="del_id" value="<?= htmlspecialchars($topicId) ?>">
+                    <button type="submit" style="background:none;border:none;color:#ef4444;font-size:1.1rem;cursor:pointer;padding:0;"><i class='bx bx-trash'></i></button>
+                </form>
+                <?php endif; ?>
+                <div style="font-size: 0.7rem; color: #9ca3af;">
+                    <?= date('d/m/Y H:i', strtotime($topic['createdAt'])) ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Replies as chat bubbles -->
+    <?php foreach($rawReplies as $r): ?>
+        <?php 
+            // La lógica cambia: si la respuesta es del creador del tema, va a la izquierda igual que el tema original.
+            // Si la respuesta es de cualquier otra persona, va a la derecha.
+            $isTopicAuthor = ($r['authorId'] === $topic['authorId']); 
+            $rIsHelpful = $r['isHelpful'] ?? 0;
+            $bubbleBg = $isTopicAuthor ? 'white' : '#fff7ed';
+            $bubbleBorder = $isTopicAuthor ? '#f3f4f6' : '#ffedd5';
+            if ($rIsHelpful) { $bubbleBg = '#f0fdf4'; $bubbleBorder = '#bbf7d0'; }
+        ?>
+        <div id="reply-<?= htmlspecialchars($r['id']) ?>" style="display: flex; flex-direction: column; align-items: <?= $isTopicAuthor ? 'flex-start' : 'flex-end' ?>; margin-bottom: 1rem;">
+            <div style="background: <?= $bubbleBg ?>; border: 1px solid <?= $bubbleBorder ?>; padding: 1rem 1.25rem; border-radius: <?= $isTopicAuthor ? '0 16px 16px 16px' : '16px 0 16px 16px' ?>; max-width: 90%; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+                
+                <?php if (!$isTopicAuthor): ?>
+                <div style="font-size: 0.8rem; font-weight: 700; color: #FF6A00; margin-bottom: 4px; display:flex; align-items:center; gap:0.5rem; flex-wrap: wrap;">
+                    <?= htmlspecialchars($r['authorName']) ?> <?= getRoleBadge($r['authorRole']) ?>
+                </div>
+                <?php endif; ?>
+                
+                <?php if ($rIsHelpful): ?>
+                <div style="display:inline-flex;align-items:center;gap:0.5rem;background:#22c55e;color:white;font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:999px;margin-bottom:0.5rem;">
+                    <i class='bx bxs-star'></i> Respuesta Útil
+                </div>
+                <?php endif; ?>
+
+                <div style="font-size: 0.95rem; color: #374151; white-space: pre-wrap; margin-bottom: 6px;">
+                    <?= htmlspecialchars($r['content']) ?>
+                </div>
+                
+                <div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.75rem;">
+                    <?php if ($r['authorId'] !== $userId): ?>
+                    <button onclick="toggleLike('<?= $r['id'] ?>')" id="likeBtn_<?= $r['id'] ?>" style="background:none;border:none;font-size:1.1rem;color:<?= $r['isLikedByMe'] ? '#ef4444' : '#9ca3af' ?>;cursor:pointer;padding:0;display:flex;align-items:center;gap:2px;">
+                        <i class='bx <?= $r['isLikedByMe'] ? 'bxs-like' : 'bx-like' ?>'></i>
+                        <span id="likeCount_<?= $r['id'] ?>" style="font-size:0.8rem;"><?= (int)($r['likesCount'] ?? 0) ?></span>
+                    </button>
+                    <?php endif; ?>
+                    
+                    <?php if (!$rIsHelpful && $r['authorId'] !== $userId): ?>
+                    <button id="helpfulBtn_<?= $r['id'] ?>" onclick="voteHelpful('<?= $r['id'] ?>')" style="background:none;border:none;font-size:1.1rem;color:<?= $r['isVotedHelpfulByMe'] ? '#166534' : '#9ca3af' ?>;cursor:pointer;padding:0;display:flex;align-items:center;gap:2px;">
+                        <i class='bx <?= $r['isVotedHelpfulByMe'] ? 'bxs-star' : 'bx-star' ?>'></i>
+                    </button>
+                    <?php endif; ?>
+
+                    <?php if ($canModerate): ?>
+                    <form method="POST" onsubmit="return confirm('¿Borrar esta respuesta?');" style="margin:0;">
+                        <input type="hidden" name="action" value="delete_reply">
+                        <input type="hidden" name="del_id" value="<?= htmlspecialchars($r['id']) ?>">
+                        <button type="submit" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:1.1rem;padding:0;"><i class='bx bx-trash'></i></button>
+                    </form>
+                    <?php endif; ?>
+
+                    <div style="font-size: 0.7rem; color: #9ca3af;">
+                        <?= date('d/m/Y H:i', strtotime($r['createdAt'])) ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php endforeach; ?>
+</div>
+
+<!-- PAGINATOR -->
+<?php if ($rPages > 1): ?>
+<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin:1.5rem 0;flex-wrap:wrap;">
+    <?php
+    $baseReplyUrl = 'index.php?view=forum_topic&forum_id='.urlencode($forumId).'&topic_id='.urlencode($topicId);
+    if ($rPage > 1): ?>
+        <a href="<?= $baseReplyUrl ?>&rpage=<?= $rPage - 1 ?>" style="background:#f3f4f6;color:#374151;padding:7px 14px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.875rem;">← Anterior</a>
+    <?php endif;
+    for ($pi = 1; $pi <= $rPages; $pi++):
+        $isActive = $pi === $rPage;
+        $bgStyle  = $isActive ? 'background:#FF6A00;color:white;' : 'background:#f3f4f6;color:#374151;';
+    ?>
+        <a href="<?= $baseReplyUrl ?>&rpage=<?= $pi ?>" style="<?= $bgStyle ?>padding:7px 14px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.875rem;"><?= $pi ?></a>
+    <?php endfor;
+    if ($rPage < $rPages): ?>
+        <a href="<?= $baseReplyUrl ?>&rpage=<?= $rPage + 1 ?>" style="background:#f3f4f6;color:#374151;padding:7px 14px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.875rem;">Siguiente →</a>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<!-- CHAT INPUT BOX FIXED AT BOTTOM -->
+<?php if (!$topic['isLocked']): ?>
+    <div class="chat-input-container">
+        <form method="POST" style="display: flex; width: 100%; gap: 0.5rem; margin: 0; max-width: 1200px; margin-left: auto; margin-right: auto;">
+            <input type="hidden" name="action" value="create_reply">
+            <input type="text" name="content" required placeholder="Escribe un mensaje..." style="flex-grow: 1; border-radius: 20px; border: 1px solid #d1d5db; padding: 0.75rem 1rem; outline: none; font-size: 0.95rem;">
+            <button type="submit" style="width: 45px; height: 45px; border-radius: 50%; background: #FF6A00; color: white; border: none; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0;"><i class='bx bxs-send' style="margin-left: 4px;"></i></button>
+        </form>
+    </div>
+<?php else: ?>
+    <div style="text-align:center;padding:2rem;background:#fef3c7;border-radius:1rem;border:1px solid #fde68a;margin-top:1rem;">
+        <i class='bx bxs-lock-alt' style="font-size:1.5rem;color:#92400e;display:block;margin-bottom:0.5rem;"></i>
+        <h4 style="margin:0 0 0.25rem;color:#92400e;">Tema Cerrado</h4>
+        <p style="margin:0;font-size:0.85rem;color:#78350f;">Este hilo ha sido bloqueado y no admite más respuestas.</p>
+    </div>
+<?php endif; ?>
+
+<?php else: ?>
 <!-- Post Original -->
 <div style="background:white;border-radius:1.5rem;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);border:1px solid #f3f4f6;margin-bottom:1.25rem;">
     <div style="background:<?= $forumLightBg ?>;padding:1.5rem 1.75rem;border-bottom:1px solid <?= $forumLightBorder ?>;">
@@ -899,7 +1036,7 @@ else:
         <p style="margin:0;font-size:0.85rem;color:#78350f;">Este hilo ha sido bloqueado y no admite más respuestas.</p>
     </div>
     <?php endif; ?>
-
+<?php endif; ?>
 </div><!-- /main column -->
 
 <!-- ── SIDEBAR ── -->

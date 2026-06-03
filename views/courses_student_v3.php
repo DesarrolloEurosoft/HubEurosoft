@@ -39,16 +39,17 @@ function getStatusCfg($status) {
                     <i class='bx bx-search' style="position:absolute;left:16px;top:50%;transform:translateY(-50%);color:#9ca3af;"></i>
                     <input type="text" id="v3SearchInput" placeholder="Buscar cursos..." oninput="v3ApplyFilters()" style="width:100%;padding:10px 16px 10px 44px;background:#f9fafb;border-radius:999px;border:1px solid #e5e7eb;color:#111827;font-size:0.875rem;outline:none;" onfocus="this.style.boxShadow='0 0 0 2px #FF6A00';this.style.borderColor='#FF6A00'" onblur="this.style.boxShadow='none';this.style.borderColor='#e5e7eb'">
                 </div>
-                <div style="display:flex;align-items:center;gap:4px;background:#f3f4f6;border-radius:999px;padding:4px;">
+                <div class="v3-view-toggle" style="display:flex;align-items:center;gap:4px;background:#f3f4f6;border-radius:999px;padding:4px;">
                     <button id="v3BtnGrid" onclick="v3SetView('grid')" style="padding:8px;border-radius:50%;border:none;cursor:pointer;background:#FF6A00;color:white;box-shadow:0 1px 3px rgba(0,0,0,0.1);display:flex;align-items:center;justify-content:center;"><i class='bx bx-grid-alt'></i></button>
                     <button id="v3BtnList" onclick="v3SetView('list')" style="padding:8px;border-radius:50%;border:none;cursor:pointer;background:transparent;color:#6b7280;display:flex;align-items:center;justify-content:center;"><i class='bx bx-list-ul'></i></button>
                 </div>
+
             </div>
         </div>
     </div>
 
     <!-- Course Grid -->
-    <div id="v3CourseContainer" style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem;margin-bottom:1.5rem;">
+    <div id="v3CourseContainer" class="v3-course-grid" style="margin-bottom:1.5rem;">
     <?php foreach ($allCoursesFlat as $idx => $c):
         $isLocked = $c['status'] === 'locked';
         $badge = getStatusCfg($c['status']);
@@ -196,10 +197,17 @@ function getStatusCfg($status) {
 .v3-filter{padding:10px 20px;border-radius:999px;font-size:0.875rem;font-weight:500;border:none;cursor:pointer;transition:all 0.2s;background:transparent;color:#4b5563;}
 .v3-filter.active{background:white;color:#111827;box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 .v3-filter:not(.active):hover{color:#111827;}
+
+.v3-course-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+.v3-course-grid.v3-list-view { grid-template-columns: 1fr !important; }
+
+@media (max-width: 1023px) {
+    .v3-course-grid { grid-template-columns: 1fr; }
+}
 </style>
 <script>
 let v3CurrentFilter='all';
 function v3Filter(btn){document.querySelectorAll('.v3-filter').forEach(b=>b.classList.remove('active'));btn.classList.add('active');v3CurrentFilter=btn.getAttribute('data-filter');v3ApplyFilters();}
 function v3ApplyFilters(){const q=(document.getElementById('v3SearchInput')?.value||'').toLowerCase();document.querySelectorAll('.v3-course').forEach(card=>{const t=card.getAttribute('data-title'),s=card.getAttribute('data-status');card.style.display=(t.includes(q)&&(v3CurrentFilter==='all'||v3CurrentFilter===s))?'':'none';});}
-function v3SetView(mode){const c=document.getElementById('v3CourseContainer'),g=document.getElementById('v3BtnGrid'),l=document.getElementById('v3BtnList');if(mode==='grid'){c.style.gridTemplateColumns='repeat(3,1fr)';g.style.background='#FF6A00';g.style.color='white';l.style.background='transparent';l.style.color='#6b7280';}else{c.style.gridTemplateColumns='1fr';l.style.background='#FF6A00';l.style.color='white';g.style.background='transparent';g.style.color='#6b7280';}}
+function v3SetView(mode){const c=document.getElementById('v3CourseContainer'),g=document.getElementById('v3BtnGrid'),l=document.getElementById('v3BtnList');if(mode==='grid'){c.classList.remove('v3-list-view');g.style.background='#FF6A00';g.style.color='white';l.style.background='transparent';l.style.color='#6b7280';}else{c.classList.add('v3-list-view');l.style.background='#FF6A00';l.style.color='white';g.style.background='transparent';g.style.color='#6b7280';}}
 </script>

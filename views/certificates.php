@@ -169,7 +169,7 @@ try {
 .c-title { font-size: 2rem; font-weight: 800; color: #0f172a; margin: 0 0 0.5rem 0;}
 .c-subtitle { font-size: 1rem; color: #64748b; margin:0; }
 
-.c-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; }
+.c-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 1.5rem; }
 .c-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 2rem 1.5rem 1.5rem; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; flex-direction: column; transition: transform 0.2s, box-shadow 0.2s; position:relative; overflow:hidden;}
 .c-card:hover { transform: translateY(-3px); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
 .c-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(to right, #f59e0b, #eab308); }
@@ -201,6 +201,16 @@ try {
 .btn-orange:hover { transform: scale(1.02); }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+@media(max-width: 768px) {
+    .c-page  { padding: 1rem; padding-bottom: 6rem; }
+    .c-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
+    .c-header > div:last-child { width: 100%; display: flex; flex-direction: column; gap: 0.75rem; }
+    .c-header > div:last-child .btn-mock,
+    .c-header > div:last-child .btn-orange { width: 100%; justify-content: center; box-sizing: border-box; }
+    .c-grid  { grid-template-columns: 1fr; }
+    .c-title { font-size: 1.5rem; }
+}
 </style>
 
 <div class="c-page">

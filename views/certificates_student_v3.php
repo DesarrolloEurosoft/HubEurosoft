@@ -33,12 +33,12 @@ if ($userRoleCheck === 'STUDENT') {
     $threeMonthsAgo = date('Y-m-d', strtotime('-3 months'));
 ?>
 
-<div style="max-width:1920px;margin:0 auto;padding:1rem 1.5rem 2rem;">
+<div class="cert-wrapper" style="max-width:1920px;margin:0 auto;padding:1rem 1.5rem 2rem;display:flex;flex-direction:column;gap:1.25rem;">
 <h1 style="font-size:1.75rem;font-weight:700;color:#111827;margin:0 0 1.5rem 0;">Certificados</h1>
 
 <?php if ($isLO): ?>
 <!-- ══════════ VISTA LECTOR OPERATIVO ══════════ -->
-<div class="lo-cert-grid">
+<div class="lo-cert-grid cert-stats-order">
 
     <!-- Card 1: Mis diplomas -->
     <div style="background:linear-gradient(135deg,#111827,#1f2937);border-radius:1rem;padding:1.5rem;border:1px solid #374151;color:white;position:relative;overflow:hidden;">
@@ -48,7 +48,7 @@ if ($userRoleCheck === 'STUDENT') {
                 <div style="width:48px;height:48px;border-radius:1rem;background:rgba(255,106,0,0.2);display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,106,0,0.3);">
                     <i class='bx bx-award' style="color:#FF6A00;font-size:1.5rem;"></i>
                 </div>
-                <h3 style="font-size:0.875rem;font-weight:600;color:#d1d5db;margin:0;">Mis Diplomas</h3>
+                <h3 style="font-size:0.875rem;font-weight:600;color:#d1d5db;margin:0;">Mis Certificados</h3>
             </div>
             <p style="font-size:2.25rem;font-weight:700;color:white;margin:0;"><?= $totalCerts ?></p>
             <p style="font-size:0.75rem;color:#9ca3af;margin:4px 0 0;"><?= $totalCerts === 1 ? 'Diploma obtenido' : ($totalCerts === 0 ? 'Aún no tienes diplomas' : 'Diplomas obtenidos') ?></p>
@@ -95,7 +95,7 @@ if ($userRoleCheck === 'STUDENT') {
 
 <?php else: ?>
 <!-- ══════════ VISTA ESTUDIANTE REGULAR ══════════ -->
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1.25rem;margin-bottom:1.5rem;">
+<div class="cert-grid-4 cert-stats-order">
     <!-- Total -->
     <div style="background:linear-gradient(135deg,#111827,#1f2937,#111827);border-radius:1rem;padding:1.5rem;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);border:1px solid #374151;color:white;position:relative;overflow:hidden;">
         <div style="position:absolute;top:0;right:0;width:96px;height:96px;background:rgba(255,106,0,0.1);border-radius:50%;transform:translate(50%,-50%);filter:blur(40px);"></div>
@@ -160,7 +160,7 @@ if ($userRoleCheck === 'STUDENT') {
     <?php endif; ?>
 </div>
 <?php else: ?>
-<div id="cert-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;">
+<div id="cert-grid" class="cert-grid-3 cert-list-order">
 <?php foreach ($certificates as $idx => $cert):
     $isRecent = strtotime($cert['issuedAt']) >= strtotime($threeMonthsAgo);
     $courseId  = $cert['courseId'] ?? '';
@@ -252,6 +252,31 @@ function filterCerts(type, btn) {
     if (empty) empty.style.display = visible === 0 ? 'block' : 'none';
 }
 </script>
+<style>
+.lo-cert-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+.cert-grid-4   { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; margin-bottom: 1.5rem; }
+.cert-grid-3   { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+.cert-wrapper  { display: flex; flex-direction: column; gap: 1.25rem; }
+.cert-stats-order { order: 1; }
+.cert-list-order  { order: 2; width: 100%; }
+
+/* Tablet */
+@media (max-width: 1023px) {
+    .lo-cert-grid  { grid-template-columns: 1fr; gap: 1rem; }
+    .cert-grid-4   { grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .cert-grid-3   { grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .cert-stats-order { order: 2; }
+    .cert-list-order  { order: 1; }
+}
+
+/* Móvil */
+@media (max-width: 640px) {
+    .cert-grid-4   { grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .cert-grid-3   { grid-template-columns: 1fr; gap: 0.75rem; }
+    .lo-cert-grid  { gap: 0.75rem; }
+    .cert-wrapper  { gap: 1rem; }
+}
+</style>
 
 <?php
     return;

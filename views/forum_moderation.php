@@ -50,7 +50,7 @@ function typeBadge($type) {
 
 
 <!-- Métricas Generales Automáticas -->
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem;">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 1.5rem; margin-bottom: 2.5rem;">
     <div class="card" style="display: flex; gap: 1rem; align-items: center;">
         <div style="background: #eef2ff; color: #4f46e5; width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: bold;">
             <?= count($topics) ?>
@@ -73,7 +73,7 @@ function typeBadge($type) {
 
 <div class="card" style="padding: 0;">
     <div class="table-responsive">
-        <table class="data-table">
+        <table class="data-table table-card-mode">
             <thead style="background: #f8fafc;">
                 <tr>
                     <th>Hilo y Clasificación</th>
@@ -91,7 +91,7 @@ function typeBadge($type) {
                 <?php else: ?>
                     <?php foreach($topics as $t): ?>
                         <tr>
-                            <td>
+                            <td data-label="Hilo">
                                 <div style="font-weight: 700; color: #1e293b; margin-bottom: 0.3rem; font-size: 0.95rem;">
                                     <a href="index.php?view=forum_topic&forum_id=<?php echo urlencode($t['forumId']); ?>&topic_id=<?= urlencode($t['id']) ?>" style="text-decoration: none; color: inherit;" target="_blank">
                                         <?= htmlspecialchars($t['title']) ?>
@@ -99,15 +99,15 @@ function typeBadge($type) {
                                 </div>
                                 <?= typeBadge($t['threadType']) ?>
                             </td>
-                            <td>
+                            <td data-label="Cliente">
                                 <div style="font-size: 0.85rem; font-weight: 600; color: #334155;"><?= htmlspecialchars($t['companyName'] ?: 'Organización General') ?></div>
                                 <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.1rem;"><?= htmlspecialchars($t['buName'] ?: '') ?></div>
                             </td>
-                            <td>
+                            <td data-label="Autor">
                                 <div style="font-size: 0.85rem; font-weight: 600; color: #1e293b;"><?= htmlspecialchars($t['authorName']) ?></div>
                                 <div style="font-size: 0.75rem; color: #64748b;"><?= htmlspecialchars($t['authorRole']) ?></div>
                             </td>
-                            <td>
+                            <td data-label="Estado">
                                 <div style="font-size: 0.8rem; font-weight: 600; color: #475569;">
                                     <i class='bx bx-message-rounded-dots'></i> <?= $t['totalReplies'] ?> Respuestas
                                 </div>
@@ -115,7 +115,7 @@ function typeBadge($type) {
                                     <div style="font-size: 0.75rem; color: #166534; font-weight: 700; margin-top: 0.2rem;"><i class='bx bx-check-double'></i> Validado Oficial</div>
                                 <?php endif; ?>
                             </td>
-                            <td>
+                            <td data-label="Tipo">
                                 <form method="POST" style="margin: 0;">
                                     <input type="hidden" name="action" value="change_type">
                                     <input type="hidden" name="topic_id" value="<?= htmlspecialchars($t['id']) ?>">
@@ -135,7 +135,7 @@ function typeBadge($type) {
                                     </select>
                                 </form>
                             </td>
-                            <td>
+                            <td data-label="Fecha">
                                 <div style="font-size: 0.8rem; color: #64748b;"><?= date('d/m/Y H:i', strtotime($t['createdAt'])) ?></div>
                             </td>
                             <td style="text-align: right;">
