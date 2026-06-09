@@ -9,7 +9,7 @@ if (!$courseId) {
 }
 
 // 1. Fetch Course
-$stmtC = $pdo->prepare("SELECT id, title FROM Course WHERE id = ?");
+$stmtC = $pdo->prepare("SELECT id, title, demoUntilLessonId FROM Course WHERE id = ?");
 $stmtC->execute([$courseId]);
 $course = $stmtC->fetch(PDO::FETCH_ASSOC);
 if (!$course) { echo "<div style='padding: 2rem;'><h2>Error</h2><p>Curso no encontrado.</p></div>"; return; }
@@ -118,6 +118,18 @@ if (isset($lockedIndexes[$activeLessonIndex])) {
     }
 }
 
+// Demo paywall: calcular el índice límite
+$demoLimitFlatIndex = -1; // -1 = sin límite
+if (!empty($course['demoUntilLessonId']) && !$isAdmin) {
+    foreach ($allLessonsFlat as $dIdx => $dL) {
+        if ($dL['id'] === $course['demoUntilLessonId']) {
+            $demoLimitFlatIndex = $dIdx;
+            break;
+        }
+    }
+}
+$showPaywall = ($demoLimitFlatIndex >= 0 && $activeLessonIndex > $demoLimitFlatIndex);
+
 $lesson = $allLessonsFlat[$activeLessonIndex] ?? null;
 if (!$lesson) {
     if (count($allLessonsFlat) > 0) {
@@ -134,6 +146,8 @@ $savedVideoProgress = (float)$lessonProgressData['videoProgress'];
 $prevLesson = $activeLessonIndex > 0 ? $allLessonsFlat[$activeLessonIndex - 1] : null;
 $nextLesson = $activeLessonIndex < count($allLessonsFlat) - 1 ? $allLessonsFlat[$activeLessonIndex + 1] : null;
 $isNextLocked = !$isLessonCompleted;
+// isNextDemo: se computa aqui porque depende de $nextLesson
+$isNextDemo = ($demoLimitFlatIndex >= 0 && $nextLesson !== null && ($activeLessonIndex >= $demoLimitFlatIndex));
 ?>
 
 <style>
@@ -208,6 +222,19 @@ $isNextLocked = !$isLessonCompleted;
     .l-icon.completed { background: #10b981; color: white; }
     .l-icon.active { background: #f97316; color: white; box-shadow: 0 0 0 4px #fff7ed; }
     .l-icon.locked { background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; }
+    .l-icon.demo   { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #d97706; border: 1px solid #fcd34d; }
+    .l-curr-item.demo-locked .l-curr-title { color: #d97706; font-style: italic; }
+
+    /* Paywall card */
+    .demo-paywall-wrap { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:400px; padding:3rem; text-align:center; }
+    .demo-paywall-icon { width:80px; height:80px; background:linear-gradient(135deg,#fef3c7,#fed7aa); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 2rem; box-shadow:0 20px 40px rgba(251,191,36,0.2); }
+    .demo-paywall-card { background:linear-gradient(135deg,#fff7ed,#fef9f0); border:1px solid #fed7aa; border-radius:20px; padding:2.5rem; max-width:500px; box-shadow:0 10px 40px rgba(251,191,36,0.1); }
+    .demo-paywall-tag { font-size:0.65rem; font-weight:900; color:#f59e0b; letter-spacing:0.15em; text-transform:uppercase; margin-bottom:1rem; }
+    .demo-paywall-title { font-size:1.5rem; font-weight:900; color:#1e293b; margin:0 0 1rem 0; line-height:1.3; }
+    .demo-paywall-desc { color:#64748b; line-height:1.6; margin-bottom:2rem; }
+    .demo-paywall-btn { display:inline-flex; align-items:center; gap:0.5rem; background:linear-gradient(135deg,#f97316,#ea580c); color:white; padding:0.9rem 2rem; border-radius:12px; font-weight:800; text-decoration:none; font-size:0.95rem; box-shadow:0 10px 20px rgba(249,115,22,0.3); transition:all 0.2s; }
+    .demo-paywall-btn:hover { transform:translateY(-2px); box-shadow:0 15px 30px rgba(249,115,22,0.4); }
+    .demo-paywall-url { margin-top:1rem; font-size:0.7rem; color:#94a3b8; }
     
     .l-curr-title { font-size: 0.85rem; line-height: 1.3; font-weight: 500; }
     .l-curr-item.active .l-curr-title { font-weight: 700; color: #0f172a; }
@@ -334,14 +361,20 @@ $isNextLocked = !$isLessonCompleted;
                         $comp = !empty($statusData['isCompleted']);
                         $isAct = ($flatIndex === $activeLessonIndex);
                         $isLoc = isset($lockedIndexes[$flatIndex]);
-                        
-                        $iconClass = $comp ? 'completed' : ($isAct ? 'active' : 'locked');
-                        $iconHtml = $comp ? "<i class='bx bx-check'></i>" : ($isLoc ? "<i class='bx bxs-lock-alt'></i>" : ($idx+1));
-                        if($isAct) $iconHtml = ($idx+1); 
+                        $isDemo = ($demoLimitFlatIndex >= 0 && $flatIndex > $demoLimitFlatIndex);
 
-                        $href = $isLoc ? '#' : "index.php?view=lesson&course_id={$courseId}&lesson_id={$l['id']}";
+                        if ($isDemo) {
+                            $iconClass = 'demo';
+                            $iconHtml  = "<i class='bx bxs-lock-alt'></i>";
+                            $href      = "index.php?view=lesson&course_id={$courseId}&lesson_id={$l['id']}";
+                        } else {
+                            $iconClass = $comp ? 'completed' : ($isAct ? 'active' : 'locked');
+                            $iconHtml  = $comp ? "<i class='bx bx-check'></i>" : ($isLoc ? "<i class='bx bxs-lock-alt'></i>" : ($idx+1));
+                            if ($isAct) $iconHtml = ($idx+1);
+                            $href = $isLoc ? '#' : "index.php?view=lesson&course_id={$courseId}&lesson_id={$l['id']}";
+                        }
                     ?>
-                        <a href="<?= $href ?>" class="l-curr-item <?= $isLoc ? 'locked' : '' ?> <?= $isAct ? 'active' : '' ?>">
+                        <a href="<?= $href ?>" class="l-curr-item <?= $isDemo ? 'demo-locked' : ($isLoc ? 'locked' : '') ?> <?= $isAct ? 'active' : '' ?>">
                             <div class="l-icon <?= $iconClass ?>"><?= $iconHtml ?></div>
                             <div class="l-curr-title"><?= htmlspecialchars($l['title']) ?></div>
                         </a>
@@ -379,6 +412,25 @@ $isNextLocked = !$isLessonCompleted;
     <!-- Main Content -->
     <main class="lesson-main">
         <div class="l-main-inner">
+
+        <?php if ($showPaywall): ?>
+            <!-- ── PANTALLA DE DEMO PAYWALL ── -->
+            <div class="demo-paywall-wrap">
+                <div class="demo-paywall-icon">
+                    <i class='bx bxs-lock-alt' style="font-size:2rem;color:#f59e0b;"></i>
+                </div>
+                <div class="demo-paywall-card">
+                    <div class="demo-paywall-tag">Contenido Premium</div>
+                    <h2 class="demo-paywall-title">Has llegado al límite de esta demostración</h2>
+                    <p class="demo-paywall-desc">Para acceder al programa completo y continuar tu aprendizaje, contacta a nuestro equipo. Estamos listos para ayudarte.</p>
+                    <a href="https://eurosoft.mx/contacto/" target="_blank" class="demo-paywall-btn">
+                        <i class='bx bx-envelope'></i> Contactar al Equipo
+                    </a>
+                    <div class="demo-paywall-url">eurosoft.mx/contacto/</div>
+                </div>
+            </div>
+        <?php else: ?>
+
             <div class="l-pill">LECCIÓN</div>
             <h1 class="l-title"><?php echo htmlspecialchars($lesson['title']); ?></h1>
             
@@ -424,11 +476,18 @@ $isNextLocked = !$isLessonCompleted;
             </div>
             
             <div class="l-next-action">
-                <button id="btnNextLesson" class="btn-primary <?= !$isNextLocked ? 'pulse-btn' : '' ?>" <?= $isNextLocked ? 'disabled' : '' ?> onclick="goToNextLesson()">
-                    <?= $isNextLocked ? '<i class="bx bxs-lock"></i> Completar Lección' : 'Siguiente Módulo <i class="bx bx-chevron-right"></i>' ?>
-                </button>
+                <?php if ($isNextDemo && !$isNextLocked): ?>
+                    <a href="https://eurosoft.mx/contacto/" target="_blank" class="btn-primary pulse-btn" style="text-decoration:none;display:inline-flex;align-items:center;gap:0.5rem;background:linear-gradient(135deg,#f97316,#ea580c);">
+                        <i class='bx bx-envelope'></i> Ver Contenido Completo
+                    </a>
+                <?php else: ?>
+                    <button id="btnNextLesson" class="btn-primary <?= !$isNextLocked ? 'pulse-btn' : '' ?>" <?= $isNextLocked ? 'disabled' : '' ?> onclick="goToNextLesson()">
+                        <?= $isNextLocked ? '<i class="bx bxs-lock"></i> Completar Lección' : 'Siguiente Lección <i class="bx bx-chevron-right"></i>' ?>
+                    </button>
+                <?php endif; ?>
             </div>
-            
+
+        <?php endif; // fin showPaywall ?>
         </div>
     </main>
 </div>
