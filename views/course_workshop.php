@@ -35,8 +35,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($certificateId)) $certificateId = null;
 
         if ($title) {
-            $stmt = $pdo->prepare("UPDATE Course SET title = ?, description = ?, certificateId = ?, updatedAt = NOW() WHERE id = ?");
-            if ($stmt->execute([$title, $description, $certificateId, $courseId])) {
+            $demoUntilLessonId = !empty($_POST['demoUntilLessonId']) ? $_POST['demoUntilLessonId'] : null;
+            $stmt = $pdo->prepare("UPDATE Course SET title = ?, description = ?, certificateId = ?, demoUntilLessonId = ?, updatedAt = NOW() WHERE id = ?");
+            if ($stmt->execute([$title, $description, $certificateId, $demoUntilLessonId, $courseId])) {
                 
                 // Actualizar Roles Directos vinculados al curso
                 $pdo->prepare("DELETE FROM _CourseToTrainingRole WHERE A = ?")->execute([$courseId]);
@@ -301,7 +302,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // 1. Obtener Datos del Curso
-$stmt = $pdo->prepare("SELECT id, title, description, imageUrl, certificateId FROM Course WHERE id = ?");
+$stmt = $pdo->prepare("SELECT id, title, description, imageUrl, certificateId, demoUntilLessonId FROM Course WHERE id = ?");
 $stmt->execute([$courseId]);
 $course = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -325,6 +326,15 @@ $c_path_ids = $coursePaths->fetchAll(PDO::FETCH_COLUMN);
 $stmtMods = $pdo->prepare("SELECT id, title, description, `order` FROM Module WHERE courseId = ? ORDER BY `order` ASC");
 $stmtMods->execute([$courseId]);
 $modules = $stmtMods->fetchAll(PDO::FETCH_ASSOC);
+
+// Pre-fetch lecciones por módulo para el selector de demo
+$demoModules = [];
+foreach ($modules as $dMod) {
+    $stmtDL = $pdo->prepare("SELECT id, title, `order` FROM Lesson WHERE moduleId = ? ORDER BY `order` ASC");
+    $stmtDL->execute([$dMod['id']]);
+    $dMod['lessons'] = $stmtDL->fetchAll(PDO::FETCH_ASSOC);
+    $demoModules[] = $dMod;
+}
 ?>
 
 <div style="max-width: 1600px; margin: 0 auto; padding: 2rem; padding-bottom: 8rem; animation: fadeIn 0.5s ease-out; font-family: 'Inter', sans-serif;">
@@ -589,6 +599,42 @@ $modules = $stmtMods->fetchAll(PDO::FETCH_ASSOC);
             </div>
             
             <p style="font-size: 0.75rem; color: #9ca3af; text-align: center; margin-bottom: 1.5rem;">Si dejas ambos listados vacíos, el curso será público para todos los alumnos del sistema.</p>
+
+            <!-- ── SECCIÓN DE DEMO / PAYWALL ── -->
+            <div style="margin-bottom:1.5rem; background:#fffbeb; border:1px solid #fde68a; border-radius:14px; padding:1.25rem;">
+                <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem;">
+                    <span style="font-size:1rem;">🎯</span>
+                    <span style="font-size:0.75rem; font-weight:900; color:#d97706; text-transform:uppercase; letter-spacing:0.08em;">Vista Previa / Demo</span>
+                </div>
+                <p style="font-size:0.8rem; color:#92400e; margin:0 0 1rem 0; line-height:1.5;">Selecciona la <strong>última lección accesible</strong> sin membresía. Todo lo que sigue mostrará la pantalla de contacto.</p>
+
+                <div style="display:flex; flex-direction:column; gap:0.4rem; max-height:200px; overflow-y:auto; padding-right:4px;">
+                    <!-- Sin límite -->
+                    <label style="display:flex; align-items:center; gap:0.6rem; padding:0.5rem 0.7rem; border-radius:8px; cursor:pointer; background:<?= empty($course['demoUntilLessonId']) ? '#fef3c7' : 'white' ?>; border:1px solid <?= empty($course['demoUntilLessonId']) ? '#fcd34d' : '#e5e7eb' ?>;">
+                        <input type="radio" name="demoUntilLessonId" value="" <?= empty($course['demoUntilLessonId']) ? 'checked' : '' ?> style="accent-color:#f59e0b;">
+                        <span style="font-size:0.8rem; font-weight:700; color:#374151;">✅ Sin límite — Curso completo</span>
+                    </label>
+
+                    <?php 
+                    $demoFlatNum = 0;
+                    foreach ($demoModules as $dModIdx => $dMod): ?>
+                        <div style="margin-top:0.4rem; font-size:0.65rem; font-weight:900; color:#9ca3af; text-transform:uppercase; letter-spacing:0.1em; padding:0 0.3rem;">Sección <?= $dModIdx+1 ?>: <?= htmlspecialchars($dMod['title']) ?></div>
+                        <?php foreach ($dMod['lessons'] as $dLesIdx => $dLes):
+                            $demoFlatNum++;
+                            $isSelected = ($course['demoUntilLessonId'] === $dLes['id']);
+                        ?>
+                        <label style="display:flex; align-items:center; gap:0.6rem; padding:0.4rem 0.7rem 0.4rem 1.2rem; border-radius:8px; cursor:pointer; background:<?= $isSelected ? '#fef3c7' : 'white' ?>; border:1px solid <?= $isSelected ? '#fcd34d' : '#f3f4f6' ?>;">
+                            <input type="radio" name="demoUntilLessonId" value="<?= htmlspecialchars($dLes['id']) ?>" <?= $isSelected ? 'checked' : '' ?> style="accent-color:#f59e0b;">
+                            <span style="font-size:0.78rem; color:#374151;"><span style="color:#d97706; font-weight:800;">L<?= $demoFlatNum ?></span> — <?= htmlspecialchars($dLes['title']) ?></span>
+                        </label>
+                        <?php endforeach; ?>
+                    <?php endforeach; ?>
+
+                    <?php if (empty($demoModules)): ?>
+                        <p style="font-size:0.78rem; color:#b45309; font-style:italic;">Agrega módulos y lecciones al curso primero para poder configurar el límite de demo.</p>
+                    <?php endif; ?>
+                </div>
+            </div>
 
             <div style="display: flex; justify-content: flex-end; gap: 1rem; border-top: 1px solid #f3f4f6; padding-top: 1.5rem;">
                 <button type="button" class="btn" style="background: #f3f4f6; color: #4b5563; font-weight: 700; border-radius: 10px;" onclick="closeModal('modalEditInfo')">Cancelar</button>

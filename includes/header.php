@@ -15,8 +15,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     
     <!-- Estilos -->
-    <link rel="stylesheet" href="assets/css/style.css?v=3.5">
-    <link rel="stylesheet" href="assets/css/student-v3.css?v=3.5">
+    <link rel="stylesheet" href="assets/css/style.css?v=3.6">
+    <link rel="stylesheet" href="assets/css/student-v3.css?v=3.6">
     
     <!-- Iconos Boxicons -->
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>

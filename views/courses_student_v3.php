@@ -71,6 +71,9 @@ function getStatusCfg($status) {
             <?php endif; ?>
             <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.6),transparent);"></div>
             <?php if ($isLocked): ?><div style="position:absolute;inset:0;background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><i class='bx bx-lock' style="font-size:1.5rem;color:rgba(255,255,255,0.7);"></i></div><?php endif; ?>
+            <?php if (!empty($c['demoUntilLessonId'])): ?>
+            <div style="position:absolute;top:12px;right:12px;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;font-size:0.6rem;font-weight:900;letter-spacing:0.12em;padding:4px 10px;border-radius:20px;text-transform:uppercase;box-shadow:0 4px 10px rgba(245,158,11,0.4);">🎯 Demo</div>
+            <?php endif; ?>
             <div style="position:absolute;top:16px;left:16px;background:<?= $badge['bg'] ?>;border:1px solid <?= $badge['border'] ?>;padding:6px 12px;border-radius:8px;backdrop-filter:blur(4px);display:flex;align-items:center;gap:6px;">
                 <i class='bx <?= $badge['icon'] ?>' style="font-size:0.875rem;color:<?= $badge['text'] ?>;"></i>
                 <span style="font-size:0.75rem;font-weight:600;color:<?= $badge['text'] ?>;"><?= $badge['label'] ?></span>
