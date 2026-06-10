@@ -707,13 +707,21 @@ if ($qUserId) {
             $uIds = array_column($fullUserList, 'id');
             $placeholders = str_repeat('?,', count($uIds) - 1) . '?';
             $stmtC = $pdo->prepare("
-                SELECT c.title as name, 
-                       cp.userId, cp.isCompleted, cp.quizPassed, cp.quizScore, cp.quizAttempts,
+                SELECT c.title as name,
+                       assigned.userId,
+                       CASE WHEN cp.courseId IS NOT NULL THEN 1 ELSE 0 END as hasStarted,
+                       cp.isCompleted, cp.quizPassed, cp.quizScore, cp.quizAttempts,
                        (SELECT COUNT(l.id) FROM Lesson l JOIN Module m ON l.moduleId = m.id WHERE m.courseId = c.id) as totalLessons,
-                       (SELECT COUNT(lp.id) FROM LessonProgress lp JOIN Lesson l ON lp.lessonId = l.id JOIN Module m ON l.moduleId = m.id WHERE m.courseId = c.id AND lp.userId = cp.userId AND lp.isCompleted = 1) as completedLessons
-                FROM CourseProgress cp
-                JOIN Course c ON cp.courseId = c.id
-                WHERE cp.userId IN ($placeholders)
+                       (SELECT COUNT(lp2.id) FROM LessonProgress lp2 JOIN Lesson l2 ON lp2.lessonId = l2.id JOIN Module m2 ON l2.moduleId = m2.id WHERE m2.courseId = c.id AND lp2.userId = assigned.userId AND lp2.isCompleted = 1) as completedLessons
+                FROM (
+                    SELECT DISTINCT tru.B as userId, lpc.courseId
+                    FROM _TrainingRoleToUser tru
+                    JOIN _LearningPathToTrainingRole lptr ON tru.A = lptr.B
+                    JOIN LearningPathCourse lpc ON lptr.A = lpc.learningPathId
+                    WHERE tru.B IN ($placeholders)
+                ) assigned
+                JOIN Course c ON c.id = assigned.courseId
+                LEFT JOIN CourseProgress cp ON cp.courseId = c.id AND cp.userId = assigned.userId
                 ORDER BY c.title ASC
             ");
             $stmtC->execute($uIds);
@@ -785,7 +793,7 @@ if ($qUserId) {
                                     <?php if(!empty($courses)): ?>
                                         <div style="display: flex; flex-direction: column; gap: 0.4rem; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 0.5rem;">
                                             <?php foreach($courses as $c): 
-                                                $hasStarted = $c['userId'] !== null;
+                                                $hasStarted = $c['hasStarted'] == 1;
                                                 $isComp = $c['isCompleted'] == 1 || $c['isCompleted'] === true;
                                                 $passed = $c['quizPassed'] == 1 || $c['quizPassed'] === true;
                                                 $tL = (int)$c['totalLessons'];
