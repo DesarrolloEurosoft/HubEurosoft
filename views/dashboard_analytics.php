@@ -523,27 +523,33 @@ if ($qUserId) {
     <?php if ($showKpiExtras): ?>
     <div class="kpi-extras-grid">
 
-        <!-- Roles Críticos -->
+        <!-- Roles Críticos — Gauge Semicircular -->
         <?php if (!empty($criticalRolesData)): ?>
         <div style="background:white;border-radius:16px;border:1px solid #f1f5f9;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);padding:1.5rem;">
-            <h3 style="font-size:0.95rem;font-weight:800;color:#0f172a;margin:0 0 1.2rem;display:flex;align-items:center;gap:0.5rem;">
-                <i class='bx bxs-target-lock' style='color:#ef4444;font-size:1.1rem;'></i> Roles Críticos
+            <h3 style="font-size:0.95rem;font-weight:800;color:#0f172a;margin:0 0 1.4rem;display:flex;align-items:center;gap:0.5rem;">
+                <i class='bx bxs-shield-alt-2' style='color:#ef4444;font-size:1.2rem;'></i> Roles Críticos
             </h3>
-            <div style="display:flex;flex-direction:column;gap:0.85rem;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:0.75rem 0.25rem;">
             <?php foreach($criticalRolesData as $cr):
-                $crC = $cr['level']==='green' ? '#16a34a' : ($cr['level']==='yellow' ? '#d97706' : '#dc2626');
+                $crC  = $cr['level']==='green' ? '#16a34a' : ($cr['level']==='yellow' ? '#d97706' : '#dc2626');
+                $crBg = $cr['level']==='green' ? '#f0fdf4' : ($cr['level']==='yellow' ? '#fffbeb' : '#fef2f2');
+                $gLen  = round(M_PI * 40, 2); // 125.66
+                $gFill = round(($cr['pct'] / 100) * $gLen, 2);
             ?>
-                <div style="display:flex;align-items:center;gap:0.75rem;">
-                    <div style="width:9px;height:9px;border-radius:50%;background:<?= $crC ?>;flex-shrink:0;"></div>
-                    <div style="flex:1;min-width:0;">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:0.2rem;">
-                            <span style="font-size:0.78rem;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= htmlspecialchars($cr['name']) ?></span>
-                            <span style="font-size:0.78rem;font-weight:800;color:<?= $crC ?>;margin-left:0.5rem;flex-shrink:0;"><?= $cr['pct'] ?>%</span>
+                <div style="display:flex;flex-direction:column;align-items:center;">
+                    <div style="position:relative;width:100px;height:60px;">
+                        <svg width="100" height="58" viewBox="0 0 100 58" aria-hidden="true">
+                            <path d="M 10,54 A 40,40 0 0,1 90,54" fill="none" stroke="#f1f5f9" stroke-width="10" stroke-linecap="round"/>
+                            <path d="M 10,54 A 40,40 0 0,1 90,54" fill="none" stroke="<?= $crC ?>" stroke-width="10" stroke-linecap="round"
+                                stroke-dasharray="<?= $gFill ?> <?= $gLen ?>"/>
+                        </svg>
+                        <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);white-space:nowrap;text-align:center;">
+                            <span style="font-size:0.9rem;font-weight:900;color:<?= $crC ?>;"><?= $cr['pct'] ?>%</span>
                         </div>
-                        <div style="width:100%;background:#f1f5f9;border-radius:999px;height:5px;overflow:hidden;">
-                            <div style="height:100%;background:<?= $crC ?>;width:<?= max($cr['pct'],2) ?>%;transition:width 0.5s;"></div>
-                        </div>
-                        <div style="font-size:0.65rem;color:#94a3b8;margin-top:0.2rem;"><?= $cr['users'] ?> persona<?= $cr['users']!==1?'s':'' ?></div>
+                    </div>
+                    <div style="text-align:center;margin-top:0.35rem;">
+                        <div style="font-size:0.68rem;font-weight:700;color:#0f172a;line-height:1.2;word-break:break-word;"><?= htmlspecialchars($cr['name']) ?></div>
+                        <div style="font-size:0.6rem;color:#94a3b8;margin-top:0.1rem;"><?= $cr['users'] ?> pers.</div>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -551,28 +557,64 @@ if ($qUserId) {
         </div>
         <?php else: ?><div></div><?php endif; ?>
 
-        <!-- Índice de Engagement -->
+        <!-- Actividad Reciente — Barras Verticales -->
+        <?php
+            $totalE   = $engagementStats['active'] + $engagementStats['atRisk'] + $engagementStats['inactive'];
+            $maxCount = max($engagementStats['active'], $engagementStats['atRisk'], $engagementStats['inactive'], 1);
+            $aBar = $engagementStats['active']   > 0 ? max(round(($engagementStats['active']   / $maxCount) * 100), 8) : 0;
+            $rBar = $engagementStats['atRisk']   > 0 ? max(round(($engagementStats['atRisk']   / $maxCount) * 100), 8) : 0;
+            $iBar = $engagementStats['inactive'] > 0 ? max(round(($engagementStats['inactive'] / $maxCount) * 100), 8) : 0;
+        ?>
         <div style="background:white;border-radius:16px;border:1px solid #f1f5f9;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);padding:1.5rem;">
             <h3 style="font-size:0.95rem;font-weight:800;color:#0f172a;margin:0 0 1.2rem;display:flex;align-items:center;gap:0.5rem;">
-                <i class='bx bxs-flame' style='color:#f59e0b;font-size:1.1rem;'></i> Actividad Reciente
+                <i class='bx bx-history' style='color:#64748b;font-size:1.2rem;'></i> Actividad Reciente
             </h3>
-            <div style="display:flex;flex-direction:column;gap:0.75rem;">
-                <div style="display:flex;align-items:center;gap:1rem;background:#f0fdf4;border-radius:10px;padding:0.65rem 1rem;">
-                    <div style="width:10px;height:10px;border-radius:50%;background:#16a34a;flex-shrink:0;"></div>
-                    <div style="flex:1;font-size:0.75rem;font-weight:600;color:#15803d;">Activos — últimos 7 días</div>
-                    <div style="font-size:1.5rem;font-weight:900;color:#16a34a;"><?= $engagementStats['active'] ?></div>
+            <!-- Barras verticales -->
+            <div style="display:flex;align-items:flex-end;justify-content:space-around;height:96px;border-bottom:2px solid #f1f5f9;padding:0 8px;gap:8px;margin-bottom:0.6rem;">
+                <!-- Activos -->
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%;">
+                    <span style="font-size:1.05rem;font-weight:900;color:#16a34a;line-height:1;margin-bottom:5px;"><?= $engagementStats['active'] ?></span>
+                    <?php if($aBar > 0): ?>
+                    <div style="width:70%;height:<?= $aBar ?>%;background:linear-gradient(180deg,#4ade80,#16a34a);border-radius:5px 5px 0 0;"></div>
+                    <?php else: ?>
+                    <div style="width:70%;height:3px;background:#f1f5f9;border-radius:5px 5px 0 0;"></div>
+                    <?php endif; ?>
                 </div>
-                <div style="display:flex;align-items:center;gap:1rem;background:#fffbeb;border-radius:10px;padding:0.65rem 1rem;">
-                    <div style="width:10px;height:10px;border-radius:50%;background:#d97706;flex-shrink:0;"></div>
-                    <div style="flex:1;font-size:0.75rem;font-weight:600;color:#b45309;">En riesgo — 7 a 14 días</div>
-                    <div style="font-size:1.5rem;font-weight:900;color:#d97706;"><?= $engagementStats['atRisk'] ?></div>
+                <!-- En riesgo -->
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%;">
+                    <span style="font-size:1.05rem;font-weight:900;color:#d97706;line-height:1;margin-bottom:5px;"><?= $engagementStats['atRisk'] ?></span>
+                    <?php if($rBar > 0): ?>
+                    <div style="width:70%;height:<?= $rBar ?>%;background:linear-gradient(180deg,#fcd34d,#d97706);border-radius:5px 5px 0 0;"></div>
+                    <?php else: ?>
+                    <div style="width:70%;height:3px;background:#f1f5f9;border-radius:5px 5px 0 0;"></div>
+                    <?php endif; ?>
                 </div>
-                <div style="display:flex;align-items:center;gap:1rem;background:#fef2f2;border-radius:10px;padding:0.65rem 1rem;">
-                    <div style="width:10px;height:10px;border-radius:50%;background:#dc2626;flex-shrink:0;"></div>
-                    <div style="flex:1;font-size:0.75rem;font-weight:600;color:#b91c1c;">Inactivos — más de 14 días</div>
-                    <div style="font-size:1.5rem;font-weight:900;color:#dc2626;"><?= $engagementStats['inactive'] ?></div>
+                <!-- Inactivos -->
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%;">
+                    <span style="font-size:1.05rem;font-weight:900;color:#dc2626;line-height:1;margin-bottom:5px;"><?= $engagementStats['inactive'] ?></span>
+                    <?php if($iBar > 0): ?>
+                    <div style="width:70%;height:<?= $iBar ?>%;background:linear-gradient(180deg,#f87171,#dc2626);border-radius:5px 5px 0 0;"></div>
+                    <?php else: ?>
+                    <div style="width:70%;height:3px;background:#f1f5f9;border-radius:5px 5px 0 0;"></div>
+                    <?php endif; ?>
                 </div>
             </div>
+            <!-- Etiquetas eje X -->
+            <div style="display:flex;justify-content:space-around;padding:0 8px;gap:8px;margin-bottom:0.6rem;">
+                <div style="flex:1;text-align:center;">
+                    <div style="font-size:0.62rem;font-weight:700;color:#15803d;text-transform:uppercase;">Activos</div>
+                    <div style="font-size:0.55rem;color:#94a3b8;margin-top:1px;">últ. 7 días</div>
+                </div>
+                <div style="flex:1;text-align:center;">
+                    <div style="font-size:0.62rem;font-weight:700;color:#b45309;text-transform:uppercase;">En Riesgo</div>
+                    <div style="font-size:0.55rem;color:#94a3b8;margin-top:1px;">7-14 días</div>
+                </div>
+                <div style="flex:1;text-align:center;">
+                    <div style="font-size:0.62rem;font-weight:700;color:#b91c1c;text-transform:uppercase;">Inactivos</div>
+                    <div style="font-size:0.55rem;color:#94a3b8;margin-top:1px;">+14 días</div>
+                </div>
+            </div>
+            <div style="font-size:0.57rem;color:#cbd5e1;">Basado en último inicio de sesión</div>
         </div>
     </div>
     <?php endif; ?>
