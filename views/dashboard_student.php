@@ -103,22 +103,152 @@ foreach($allAchievements as $ach) {
 $completedAchCount = count(array_filter($combinedItems, fn($i) => $i['completed']));
 $completedLogroCount = count(array_filter($logroItems, fn($i) => $i['completed']));
 $completedMedallaCount = count(array_filter($medallaItems, fn($i) => $i['completed']));
+
+// ── Lector Operativo detection ────────────────────────────────────────
+$isLectorOp = false;
+try {
+    $_loStmt = $pdo->prepare(
+        "SELECT 1 FROM _TrainingRoleToUser rtu
+         JOIN TrainingRole tr ON rtu.A = tr.id
+         WHERE rtu.B = ? AND LOWER(tr.name) LIKE '%lector%operativo%' LIMIT 1"
+    );
+    $_loStmt->execute([$_SESSION['user_id']]);
+    $isLectorOp = (bool)$_loStmt->fetchColumn();
+} catch (\Throwable $_loE) { $isLectorOp = false; }
+
+// ── Forum stats para Lector Operativo (acotados al foro LO accesible) ───────
+$loForumTopics      = 0;
+$loForumReplies     = 0;
+$loForumLikes       = 0;
+$loLastTopicTitle   = null;
+$loLastTopicId      = null;
+$loLastTopicForumId = null;
+$loLastTopicDate    = null;
+$loPendingTopicTitle   = null;
+$loPendingTopicId      = null;
+$loPendingTopicForumId = null;
+$loPendingReplies      = 0;
+if ($isLectorOp) {
+    try {
+        // Obtener el ID del foro LO al que tiene acceso este usuario
+        // (mismo patrón que forums.php: targetRole = ID del TrainingRole LO)
+        $stLORoleId = $pdo->prepare(
+            "SELECT id FROM TrainingRole WHERE LOWER(name) LIKE '%lector%operativo%' LIMIT 1"
+        );
+        $stLORoleId->execute();
+        $loRoleId = $stLORoleId->fetchColumn();
+
+        // Foro exclusivo LO (solo el foro con targetRole = ID del rol LO, de su empresa)
+        $loForumIds = [];
+        if ($loRoleId) {
+            $stLoForums = $pdo->prepare(
+                "SELECT id FROM Forum
+                 WHERE targetRole = ?
+                   AND companyId = (SELECT companyId FROM User WHERE id = ? LIMIT 1)"
+            );
+            $stLoForums->execute([$loRoleId, $_SESSION['user_id']]);
+            $loForumIds = $stLoForums->fetchAll(\PDO::FETCH_COLUMN);
+        }
+
+        if (!empty($loForumIds)) {
+            $ph = implode(',', array_fill(0, count($loForumIds), '?'));
+
+            // Temas publicados en esos foros
+            $stFT = $pdo->prepare("SELECT COUNT(*) FROM ForumTopic WHERE authorId = ? AND forumId IN ($ph)");
+            $stFT->execute(array_merge([$_SESSION['user_id']], $loForumIds));
+            $loForumTopics = (int)$stFT->fetchColumn();
+
+            // Respuestas dadas en esos foros
+            $stFR = $pdo->prepare(
+                "SELECT COUNT(*) FROM ForumReply WHERE authorId = ?
+                 AND topicId IN (SELECT id FROM ForumTopic WHERE forumId IN ($ph))"
+            );
+            $stFR->execute(array_merge([$_SESSION['user_id']], $loForumIds));
+            $loForumReplies = (int)$stFR->fetchColumn();
+
+            // Likes recibidos en esos foros
+            $stFL = $pdo->prepare(
+                "SELECT COALESCE(SUM(likes),0) FROM ForumTopic WHERE authorId = ? AND forumId IN ($ph)"
+            );
+            $stFL->execute(array_merge([$_SESSION['user_id']], $loForumIds));
+            $loForumLikes = (int)$stFL->fetchColumn();
+
+            // Último tema publicado
+            $stLT = $pdo->prepare(
+                "SELECT id, title, forumId, createdAt FROM ForumTopic
+                 WHERE authorId = ? AND forumId IN ($ph)
+                 ORDER BY createdAt DESC LIMIT 1"
+            );
+            $stLT->execute(array_merge([$_SESSION['user_id']], $loForumIds));
+            $loLastTopic = $stLT->fetch();
+            if ($loLastTopic) {
+                $loLastTopicTitle   = $loLastTopic['title'];
+                $loLastTopicId      = $loLastTopic['id'];
+                $loLastTopicForumId = $loLastTopic['forumId'];
+                $loLastTopicDate    = $loLastTopic['createdAt'];
+            }
+
+            // Hilo pendiente de respuesta (último tema propio donde la última reply no es suya)
+            $stPT = $pdo->prepare("
+                SELECT t.id, t.title, t.forumId,
+                       (SELECT COUNT(*) FROM ForumReply WHERE topicId = t.id) AS replies,
+                       (SELECT MAX(r2.createdAt) FROM ForumReply r2 WHERE r2.topicId = t.id) AS lastReplyAt,
+                       (SELECT r3.authorId FROM ForumReply r3 WHERE r3.topicId = t.id ORDER BY r3.createdAt DESC LIMIT 1) AS lastReplyAuthor
+                FROM ForumTopic t
+                WHERE t.authorId = ? AND t.forumId IN ($ph)
+                  AND EXISTS (SELECT 1 FROM ForumReply r WHERE r.topicId = t.id AND r.authorId != ?)
+                HAVING lastReplyAuthor != ?
+                ORDER BY lastReplyAt DESC
+                LIMIT 1
+            ");
+            $stPT->execute(array_merge([$_SESSION['user_id']], $loForumIds, [$_SESSION['user_id'], $_SESSION['user_id']]));
+            $loPendingRow = $stPT->fetch();
+            if ($loPendingRow) {
+                $loPendingTopicTitle   = $loPendingRow['title'];
+                $loPendingTopicId      = $loPendingRow['id'];
+                $loPendingTopicForumId = $loPendingRow['forumId'];
+                $loPendingReplies      = (int)$loPendingRow['replies'];
+            }
+        }
+    } catch (\Throwable $e) {}
+}
 ?>
 
 <!-- ═══ WELCOME SECTION (exact from page.tsx:238-284) ═══ -->
-<div style="max-width:1920px;margin:0 auto;padding:1rem 1.5rem;">
+<style>
+    .dash-kpi-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+    .dash-bento-grid { display: grid; grid-template-columns: 3fr 9fr; gap: 1.25rem; }
+    .dash-top-row-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+    
+    @media (max-width: 1023px) {
+        .dash-bento-grid { grid-template-columns: 1fr; }
+        .dash-top-row-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── Móvil ≤ 768px ── */
+    @media (max-width: 768px) {
+        .dash-outer-wrap  { padding: 1rem 1rem !important; }
+        .dash-stats-outer { flex-direction: column !important; align-items: flex-start !important; gap: 0.75rem !important; }
+        .dash-pills-row   { width: 100%; flex-wrap: wrap; gap: 0.5rem !important; overflow-x: visible; }
+        .dash-kpi-grid    { width: 100%; gap: 0.5rem; }
+        .dash-bento-grid  { gap: 0.75rem; }
+        h1.dash-title     { font-size: 1.45rem !important; margin-bottom: 0.75rem !important; }
+    }
+</style>
+<div class="dash-outer-wrap" style="max-width:1920px;margin:0 auto;padding:1rem 1.5rem;">
 
     <!-- Welcome heading -->
     <div style="margin-bottom:1.5rem;">
-        <h1 style="font-size:1.75rem;font-weight:700;color:#111827;margin:0 0 1rem 0;">
+    <h1 class="dash-title" style="font-size:1.75rem;font-weight:700;color:#111827;margin:0 0 1rem 0;">
             Bienvenido, <?= htmlspecialchars($firstName ?: 'Estudiante') ?>
         </h1>
 
-        <!-- StatPills + KPI Cards row (flex-row from md) -->
-        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:0.75rem 1.5rem;">
+        <!-- StatPills + KPI Cards row -->
+        <div class="dash-stats-outer" style="display:flex;flex-wrap:wrap;align-items:center;gap:0.75rem 1.5rem;">
             
-            <!-- StatPills (exact from StatPill.tsx: pill with rounded-full, not circle) -->
-            <div style="display:flex;align-items:center;gap:0.75rem;overflow-x:auto;">
+            <?php if (!$isLectorOp): ?>
+            <!-- StatPills -->
+            <div class="dash-pills-row" style="display:flex;align-items:center;gap:0.75rem;overflow-x:auto;">
                 <!-- Cursos Activos: bg-gray-900 text-white -->
                 <div style="display:flex;align-items:center;gap:0.75rem;flex-shrink:0;">
                     <div style="background:#111827;color:white;padding:6px 16px;border-radius:999px;font-size:0.875rem;font-weight:600;"><?= count($sd['activeCourses']) ?></div>
@@ -135,11 +265,13 @@ $completedMedallaCount = count(array_filter($medallaItems, fn($i) => $i['complet
                     <span style="font-size:0.875rem;color:#4b5563;white-space:nowrap;">Progreso General</span>
                 </div>
             </div>
+            <?php endif; ?>
 
             <div style="flex:1;"></div>
 
-            <!-- KPI Cards: bg-white rounded-2xl p-3 md:p-4 shadow-sm border -->
-            <div style="display:grid;grid-template-columns:repeat(3,auto);gap:0.75rem;">
+            <?php if (!$isLectorOp): ?>
+            <!-- KPI Cards -->
+            <div class="dash-kpi-grid">
                 <div style="background:white;border-radius:1rem;padding:0.75rem 1rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
                     <div style="display:flex;align-items:center;gap:0.75rem;">
                         <i class='bx bxs-hot' style="color:#FF6A00;font-size:1.25rem;"></i>
@@ -168,11 +300,12 @@ $completedMedallaCount = count(array_filter($medallaItems, fn($i) => $i['complet
                     </div>
                 </div>
             </div>
+            <?php endif; ?>
         </div>
     </div>
 
     <!-- ═══ BENTO GRID 3-9 layout (exact from page.tsx:287) ═══ -->
-    <div style="display:grid;grid-template-columns:3fr 9fr;gap:1.25rem;">
+    <div class="dash-bento-grid">
 
         <!-- === LEFT COLUMN (3 cols) === -->
         <div style="display:flex;flex-direction:column;gap:1.25rem;">
@@ -248,7 +381,7 @@ $completedMedallaCount = count(array_filter($medallaItems, fn($i) => $i['complet
             <!-- RankingCard (exact from RankingCard.tsx) -->
             <div style="background:white;border-radius:1.5rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
-                    <h3 style="font-size:0.875rem;font-weight:600;color:#111827;margin:0;">Ranking</h3>
+                    <h3 style="font-size:0.875rem;font-weight:600;color:#111827;margin:0;"><?= $isLectorOp ? 'Ranking · Lectores Operativos' : 'Ranking' ?></h3>
                 </div>
                 <div style="display:flex;flex-direction:column;gap:0.5rem;">
                     <?php foreach (array_slice($rankingUsers, 0, 3) as $rUser): 
@@ -284,7 +417,7 @@ $completedMedallaCount = count(array_filter($medallaItems, fn($i) => $i['complet
                 <?php endif; ?>
             </div>
 
-            <!-- ActivityCard (exact from ActivityCard.tsx) -->
+            <!-- Actividad Reciente -->
             <div style="background:white;border-radius:1.5rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
                     <h3 style="font-size:0.875rem;font-weight:600;color:#111827;margin:0;">Actividad Reciente</h3>
@@ -318,7 +451,38 @@ $completedMedallaCount = count(array_filter($medallaItems, fn($i) => $i['complet
                 <?php endif; ?>
             </div>
 
-            <!-- Logros del Sistema -->
+            <!-- Certificaciones (LO) / Logros (NON-LO) -->
+            <?php if ($isLectorOp): ?>
+            <div style="background:white;border-radius:1.5rem;padding:1rem 1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+                    <h3 style="font-size:0.875rem;font-weight:600;color:#111827;margin:0;">Certificaciones <?php if(count($sd['certificates'])>0): ?><span style="background:#FF6A00;color:white;font-size:0.6rem;font-weight:800;padding:2px 7px;border-radius:999px;margin-left:4px;"><?= count($sd['certificates']) ?></span><?php endif; ?></h3>
+                    <a href="index.php?view=certificates" style="width:24px;height:24px;border-radius:50%;background:#f3f4f6;display:flex;align-items:center;justify-content:center;text-decoration:none;color:#4b5563;font-size:0.75rem;">↗</a>
+                </div>
+                <?php if (empty($sd['certificates'])): ?>
+                    <div style="display:flex;align-items:center;gap:0.625rem;padding:0.5rem 0.75rem;background:#f9fafb;border-radius:0.875rem;margin-bottom:0.75rem;">
+                        <i class='bx bx-award' style="font-size:1.25rem;color:#d1d5db;flex-shrink:0;"></i>
+                        <p style="font-size:0.78rem;color:#9ca3af;margin:0;line-height:1.3;">Completa cursos para obtener certificados</p>
+                    </div>
+                <?php else: ?>
+                    <?php foreach (array_slice($sd['certificates'], 0, 1) as $cert): ?>
+                    <div style="background:linear-gradient(135deg,#FF6A00,#FFA500);border-radius:1rem;padding:0.75rem;color:white;margin-bottom:0.75rem;">
+                        <div style="display:flex;align-items:center;gap:0.625rem;">
+                            <div style="width:30px;height:30px;background:rgba(255,255,255,0.2);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <i class='bx bx-award' style="font-size:1rem;"></i>
+                            </div>
+                            <div>
+                                <h4 style="font-weight:700;font-size:0.8rem;margin:0;"><?= htmlspecialchars($cert['certName'] ?? 'Certificado') ?></h4>
+                                <p style="font-size:0.68rem;color:rgba(255,255,255,0.8);margin:2px 0 0;"><?= $cert['issuedAt'] ? date('M Y', strtotime($cert['issuedAt'])) : '' ?></p>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+                <a href="index.php?view=certificates" style="display:block;width:100%;background:#f3f4f6;color:#374151;padding:6px 0;border-radius:10px;font-size:0.8rem;font-weight:600;text-align:center;text-decoration:none;" onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'">Ver certificaciones</a>
+            </div>
+
+
+            <?php else: // non-LO sees Logros ?>
             <div style="background:white;border-radius:1.5rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
                     <h3 style="font-size:0.875rem;font-weight:600;color:#111827;margin:0;">Logros</h3>
@@ -341,15 +505,55 @@ $completedMedallaCount = count(array_filter($medallaItems, fn($i) => $i['complet
                     <?php endforeach; ?>
                 </div>
             </div>
+            <?php endif; ?>
         </div>
 
         <!-- === RIGHT COLUMN (9 cols) === -->
         <div style="display:flex;flex-direction:column;gap:1.25rem;min-width:0;">
 
-            <!-- Top Row: Progress, Experience, Certificates (3 cols) -->
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem;">
+            <!-- Top Row: Racha + Forum card (2 cols, forum spans 2) -->
+            <div class="<?= $isLectorOp ? 'lo-top-row' : 'lo-3col-grid' ?>">
 
-                <!-- ProgressCard (dynamic XP) -->
+                <?php if ($isLectorOp):
+                $streakVal = $sd['streak'];
+                if ($streakVal >= 30) $sMsg = "¡30+ días! Eres un ejemplo.";
+                elseif ($streakVal >= 14) $sMsg = "¡Dos semanas de racha!";
+                elseif ($streakVal >= 7)  $sMsg = "¡Una semana entera!";
+                elseif ($streakVal >= 3)  $sMsg = "¡{$streakVal} días seguidos!";
+                elseif ($streakVal === 1) $sMsg = "¡Primer día! Vuelve mañana.";
+                else $sMsg = "Entra hoy y comienza tu racha.";
+                ?>
+                <div style="background:linear-gradient(135deg,#111827,#1f2937,#111827);border-radius:1.5rem;padding:1.5rem 1.25rem;border:1px solid #374151;position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;">
+                    <div style="position:absolute;top:0;left:50%;width:180px;height:180px;background:rgba(255,106,0,0.12);border-radius:50%;transform:translate(-50%,-60%);filter:blur(48px);pointer-events:none;"></div>
+                    <div style="position:absolute;bottom:0;left:50%;width:120px;height:120px;background:rgba(234,179,8,0.08);border-radius:50%;transform:translate(-50%,50%);filter:blur(36px);pointer-events:none;"></div>
+                    <div style="position:relative;z-index:10;width:100%;">
+                        <div style="display:flex;align-items:center;justify-content:center;gap:0.4rem;margin-bottom:0.5rem;">
+                            <i class='bx bxs-hot' style="color:#FF6A00;font-size:1rem;"></i>
+                            <span style="font-size:0.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">Racha</span>
+                        </div>
+                        <p style="font-size:4rem;font-weight:800;color:white;margin:0;line-height:1;letter-spacing:-0.03em;"><?= $streakVal ?></p>
+                        <p style="font-size:0.75rem;color:#6b7280;margin:6px 0 1rem;"><?= $streakVal===1?'día':'días' ?> seguidos</p>
+                        <div style="display:flex;align-items:center;justify-content:center;gap:5px;margin-bottom:1rem;">
+                            <?php
+                            $todayIdx2 = (int)date('N') - 1;
+                            $dayLabels = ['L','M','X','J','V','S','D'];
+                            for ($di=0;$di<7;$di++):
+                                $isAct = ($di<=$todayIdx2 && ($todayIdx2-$di)<$streakVal);
+                                $isToday2 = ($di===$todayIdx2);
+                            ?>
+                            <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+                                <div style="width:20px;height:5px;border-radius:999px;background:<?= $isAct?'linear-gradient(to right,#FF6A00,#FFA500)':'rgba(255,255,255,0.1)' ?>;<?= $isToday2?'box-shadow:0 0 6px rgba(255,106,0,0.7);':''  ?>"></div>
+                                <span style="font-size:0.55rem;color:<?= $isToday2?'#FF6A00':'#4b5563' ?>;font-weight:<?= $isToday2?'700':'400' ?>"><?= $dayLabels[$di] ?></span>
+                            </div>
+                            <?php endfor; ?>
+                        </div>
+                        <div style="background:rgba(255,106,0,0.12);border:1px solid rgba(255,106,0,0.25);border-radius:0.75rem;padding:0.5rem 0.75rem;">
+                            <p style="font-size:0.7rem;color:#fb923c;margin:0;"><?= htmlspecialchars($sMsg) ?></p>
+                        </div>
+                    </div>
+                </div>
+                <?php else: ?>
+                <!-- Progreso Semanal — solo para no-LO -->
                 <div style="background:white;border-radius:1.5rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
                         <h3 style="font-size:0.875rem;font-weight:600;color:#111827;margin:0;">Progreso Semanal</h3>
@@ -381,8 +585,75 @@ $completedMedallaCount = count(array_filter($medallaItems, fn($i) => $i['complet
                         <?php endforeach; ?>
                     </div>
                 </div>
+                <?php endif; ?>
 
-                <!-- ExperienceCard (exact from ExperienceCard.tsx) -->
+                <?php if ($isLectorOp): ?>
+                <!-- LO: Forum Interaction Card -->
+                <div style="background:white;border-radius:1.5rem;padding:1.5rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
+                    <!-- Header -->
+                    <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1.25rem;">
+                        <div style="width:32px;height:32px;border-radius:8px;background:#fff7ed;display:flex;align-items:center;justify-content:center;">
+                            <i class='bx bx-message-rounded-dots' style="font-size:1.1rem;color:#FF6A00;"></i>
+                        </div>
+                        <h3 style="font-size:0.875rem;font-weight:700;color:#111827;margin:0;">Mi Actividad en el Foro</h3>
+                    </div>
+                    <!-- 3 KPIs -->
+                    <div class="lo-forum-kpis">
+                        <div style="background:#fff7ed;border-radius:1rem;padding:0.875rem;text-align:center;">
+                            <p style="font-size:1.875rem;font-weight:800;color:#111827;margin:0;line-height:1;"><?= $loForumTopics ?></p>
+                            <p style="font-size:0.7rem;color:#6b7280;margin:5px 0 0;font-weight:600;">Temas publicados</p>
+                        </div>
+                        <div style="background:#fff7ed;border-radius:1rem;padding:0.875rem;text-align:center;">
+                            <p style="font-size:1.875rem;font-weight:800;color:#111827;margin:0;line-height:1;"><?= $loForumReplies ?></p>
+                            <p style="font-size:0.7rem;color:#6b7280;margin:5px 0 0;font-weight:600;">Respuestas dadas</p>
+                        </div>
+                        <div style="background:#fff7ed;border-radius:1rem;padding:0.875rem;text-align:center;">
+                            <p style="font-size:1.875rem;font-weight:800;color:#111827;margin:0;line-height:1;"><?= $loForumLikes ?></p>
+                            <p style="font-size:0.7rem;color:#6b7280;margin:5px 0 0;font-weight:600;">Likes recibidos</p>
+                        </div>
+                    </div>
+                    <!-- Sección inferior: hilo pendiente + botón nueva discusión -->
+                    <div style="display:flex;flex-direction:column;gap:0.625rem;margin-top:0.25rem;">
+
+                        <?php if ($loPendingTopicTitle): ?>
+                        <!-- Hilo pendiente de respuesta -->
+                        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.15rem;">
+                            <div style="width:6px;height:6px;border-radius:50%;background:#f59e0b;flex-shrink:0;"></div>
+                            <span style="font-size:0.68rem;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.05em;">Esperando tu respuesta</span>
+                        </div>
+                        <a href="index.php?view=forum_topic&forum_id=<?= urlencode($loPendingTopicForumId) ?>&topic_id=<?= urlencode($loPendingTopicId) ?>" style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1rem;background:#fffbeb;border:1px solid #fde68a;border-radius:0.875rem;text-decoration:none;transition:all 0.2s;" onmouseover="this.style.borderColor='#fbbf24';this.style.background='#fef3c7'" onmouseout="this.style.borderColor='#fde68a';this.style.background='#fffbeb'">
+                            <div style="width:32px;height:32px;border-radius:8px;background:#fef3c7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <i class='bx bx-comment-detail' style="font-size:1rem;color:#d97706;"></i>
+                            </div>
+                            <div style="min-width:0;flex:1;">
+                                <p style="font-size:0.8rem;font-weight:600;color:#111827;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= htmlspecialchars($loPendingTopicTitle) ?></p>
+                                <p style="font-size:0.7rem;color:#92400e;margin:2px 0 0;font-weight:600;"><?= $loPendingReplies ?> respuesta<?= $loPendingReplies !== 1 ? 's' : '' ?> · toca para responder</p>
+                            </div>
+                            <i class='bx bx-chevron-right' style="color:#fbbf24;flex-shrink:0;"></i>
+                        </a>
+                        <?php elseif ($loLastTopicTitle): ?>
+                        <!-- Sin pendientes: mostrar último hilo -->
+                        <a href="index.php?view=forum_topic&forum_id=<?= urlencode($loLastTopicForumId) ?>&topic_id=<?= urlencode($loLastTopicId) ?>" style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:0.875rem;text-decoration:none;transition:all 0.2s;" onmouseover="this.style.borderColor='#fed7aa';this.style.background='#fff7ed'" onmouseout="this.style.borderColor='#e2e8f0';this.style.background='#f8fafc'">
+                            <i class='bx bx-time-five' style="color:#9ca3af;font-size:1rem;flex-shrink:0;"></i>
+                            <div style="min-width:0;flex:1;">
+                                <p style="font-size:0.8rem;font-weight:600;color:#111827;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= htmlspecialchars($loLastTopicTitle) ?></p>
+                                <p style="font-size:0.7rem;color:#9ca3af;margin:2px 0 0;">Último tema &middot; <?= $loLastTopicDate ? date('d/m/Y', strtotime($loLastTopicDate)) : '' ?></p>
+                            </div>
+                            <i class='bx bx-chevron-right' style="color:#d1d5db;flex-shrink:0;"></i>
+                        </a>
+                        <?php endif; ?>
+
+                        <!-- Botón Nueva Discusión -->
+                        <a href="index.php?view=forums" onclick="setTimeout(()=>document.getElementById('modalCT')?.classList.add('active'),300);return true;"
+                           style="display:flex;align-items:center;justify-content:center;gap:0.5rem;padding:0.65rem 1rem;background:linear-gradient(135deg,#FF6A00,#FFA500);color:white;font-weight:700;font-size:0.8rem;border-radius:0.875rem;text-decoration:none;transition:all 0.2s;margin-top:0.125rem;"
+                           onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(255,106,0,0.35)'"
+                           onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='none'">
+                            <i class='bx bx-edit-alt' style="font-size:1rem;"></i> Nueva discusión
+                        </a>
+                    </div>
+                </div>
+                <?php else: ?>
+                <!-- ExperienceCard -->
                 <div style="background:white;border-radius:1.5rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
                         <h3 style="font-size:0.875rem;font-weight:600;color:#111827;margin:0;">Experiencia</h3>
@@ -409,8 +680,10 @@ $completedMedallaCount = count(array_filter($medallaItems, fn($i) => $i['complet
                         </div>
                     </div>
                 </div>
+                <?php endif; ?>
 
-                <!-- CertificatesCard (exact from CertificatesCard.tsx) -->
+                <?php if (!$isLectorOp): ?>
+                <!-- CertificatesCard — solo para NON-LO en top row -->
                 <div style="background:white;border-radius:1.5rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
                         <h3 style="font-size:0.875rem;font-weight:600;color:#111827;margin:0;">Certificaciones</h3>
@@ -436,12 +709,10 @@ $completedMedallaCount = count(array_filter($medallaItems, fn($i) => $i['complet
                         </div>
                         <?php endforeach; ?>
                     <?php endif; ?>
-                    <!-- CTA button (exact: bg-gray-100 hover:bg-gray-200, rounded-xl) -->
-                    <a href="index.php?view=certificates" style="display:block;width:100%;background:#f3f4f6;color:#374151;padding:8px 0;border-radius:12px;font-size:0.875rem;font-weight:600;text-align:center;text-decoration:none;transition:background 0.2s;" onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'">
-                        Ver todas las certificaciones
-                    </a>
+                    <a href="index.php?view=certificates" style="display:block;width:100%;background:#f3f4f6;color:#374151;padding:8px 0;border-radius:12px;font-size:0.875rem;font-weight:600;text-align:center;text-decoration:none;" onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'">Ver todas las certificaciones</a>
                 </div>
-            </div>
+                <?php endif; // !$isLectorOp in top row ?>
+            </div><!-- end top row grid -->
 
             <!-- CoursesCard (exact from CoursesCard.tsx: grid-cols-2, image fallback) -->
             <div style="background:white;border-radius:1.5rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
@@ -507,8 +778,8 @@ $completedMedallaCount = count(array_filter($medallaItems, fn($i) => $i['complet
                 <?php endif; ?>
             </div>
 
-            <!-- LearningPathCard (exact from LearningPathCard.tsx) -->
-            <?php if (!empty($lp['name'])): ?>
+            <!-- LearningPathCard -->
+            <?php if (!empty($lp['name']) && !$isLectorOp): ?>
             <div style="background:white;border-radius:1.5rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
                     <h3 style="font-size:0.875rem;font-weight:600;color:#111827;margin:0;">Ruta de Aprendizaje</h3>
@@ -567,7 +838,146 @@ $completedMedallaCount = count(array_filter($medallaItems, fn($i) => $i['complet
             </div>
             <?php endif; ?>
 
-            <!-- AchievementsCompact (Logros Mixtos) -->
+            <!-- Medallas/Logros bottom row -->
+            <?php if ($isLectorOp):
+                $loMedalEarned = array_values(array_filter($medallaItems, fn($m) => $m['completed']));
+                $loMedalLocked = array_values(array_filter($medallaItems, fn($m) => !$m['completed']));
+                $loMedalShow  = array_slice(array_merge($loMedalEarned, array_slice($loMedalLocked,0,max(0,6-count($loMedalEarned)))),0,6);
+                $loEarned2    = array_values(array_filter($logroItems, fn($l) => $l['completed']));
+                $loPending2   = count($logroItems) - count($loEarned2);
+                $loShowcase2  = array_slice($loEarned2, 0, 3);
+                $cLO = ['bg-indigo-500'=>'linear-gradient(135deg,#6366f1,#818cf8)','bg-rose-500'=>'linear-gradient(135deg,#f43f5e,#fb7185)','bg-sky-500'=>'linear-gradient(135deg,#0ea5e9,#38bdf8)','bg-yellow-500'=>'linear-gradient(135deg,#eab308,#facc15)','bg-amber-500'=>'linear-gradient(135deg,#f59e0b,#fbbf24)','bg-green-500'=>'linear-gradient(135deg,#22c55e,#4ade80)','bg-purple-500'=>'linear-gradient(135deg,#a855f7,#c084fc)','bg-orange-500'=>'linear-gradient(135deg,#f97316,#fb923c)','bg-red-500'=>'linear-gradient(135deg,#ef4444,#f87171)','bg-teal-500'=>'linear-gradient(135deg,#14b8a6,#2dd4bf)','bg-blue-500'=>'linear-gradient(135deg,#3b82f6,#60a5fa)','bg-pink-500'=>'linear-gradient(135deg,#ec4899,#f472b6)'];
+            ?>
+            <div class="lo-2col-grid">
+            <!-- Medallas Card -->
+            <div style="background:white;border-radius:1.5rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+                    <h3 style="font-size:0.875rem;font-weight:600;color:#111827;margin:0;">Medallas</h3>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.75rem;">
+                <?php foreach ($loMedalShow as $mItem):
+                    $mRaw = $mItem['color'] ?? '';
+                    $mColor = $cLO[$mRaw] ?? (strpos($mRaw,'#')===0||strpos($mRaw,'linear')===0 ? $mRaw : 'linear-gradient(135deg,#FF6A00,#FFA500)');
+                    $mImg = $mItem['completed'] ? ($mItem['imagePath'] ?? '') : '';
+                    $mEscT = htmlspecialchars(addcslashes((string)$mItem['title'],"'\r\n\\\""),ENT_QUOTES);
+                    $mEscD = htmlspecialchars(addcslashes((string)$mItem['description'],"'\r\n\\\""),ENT_QUOTES);
+                    $mEscIc = htmlspecialchars(addcslashes((string)$mItem['icon'],"'\r\n\\\""),ENT_QUOTES);
+                ?>
+                <?php if ($mItem['completed']): ?>
+                <div onclick="window.openMedalViewer('<?= $mEscT ?>','<?= $mEscD ?>','<?= $mEscIc ?>','<?= $mEscIc ?>')" style="padding:0.875rem 0.5rem;border-radius:1rem;text-align:center;position:relative;background:<?= $mColor ?>;box-shadow:0 4px 12px rgba(0,0,0,0.12);cursor:pointer;transition:all 0.25s;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 20px rgba(0,0,0,0.18)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)'">
+                    <div style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;background:#22c55e;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:2;"><span style="color:white;font-size:0.6rem;font-weight:bold;">✓</span></div>
+                    <div style="height:44px;display:flex;align-items:center;justify-content:center;margin-bottom:6px;">
+                        <?php if (!empty($mImg)): ?>
+                        <img src="<?= htmlspecialchars(ltrim($mImg,'/')) ?>" style="width:36px;height:36px;object-fit:cover;border-radius:50%;border:2px solid rgba(255,255,255,0.5);" alt="">
+                        <?php else: ?>
+                        <i class="<?= htmlspecialchars($mItem['icon']??'bx bxs-medal') ?>" style="font-size:1.75rem;color:white;text-shadow:0 2px 6px rgba(0,0,0,0.2);"></i>
+                        <?php endif; ?>
+                    </div>
+                    <h4 style="font-weight:700;font-size:0.72rem;color:white;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= htmlspecialchars($mItem['title']) ?></h4>
+                </div>
+                <?php else: ?>
+                <div style="padding:0.875rem 0.5rem;border-radius:1rem;text-align:center;background:#f3f4f6;cursor:default;">
+                    <div style="height:44px;display:flex;align-items:center;justify-content:center;margin-bottom:4px;opacity:0.2;">
+                        <i class="<?= htmlspecialchars($mItem['icon']??'bx bxs-medal') ?>" style="font-size:1.75rem;color:#6b7280;"></i>
+                    </div>
+                    <div style="width:14px;height:14px;background:#d1d5db;border-radius:50%;margin:0 auto 5px;display:flex;align-items:center;justify-content:center;"><i class='bx bxs-lock-alt' style="font-size:0.5rem;color:#9ca3af;"></i></div>
+                    <h4 style="font-weight:600;font-size:0.65rem;color:#9ca3af;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= htmlspecialchars($mItem['title']) ?></h4>
+                </div>
+                <?php endif; ?>
+                <?php endforeach; ?>
+                </div>
+                <?php if (count($medallaItems) > 6): ?>
+                <div style="text-align:right;margin-top:0.75rem;"><a href="index.php?view=achievements" style="font-size:0.75rem;color:#FF6A00;font-weight:600;text-decoration:none;">Ver todas (<?= count($medallaItems) ?>) →</a></div>
+                <?php endif; ?>
+                <div style="margin-top:1rem;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#6b7280;margin-bottom:5px;"><span>Colección</span><span style="font-weight:700;color:#FF6A00;"><?= $completedMedallaCount ?>/<?= count($medallaItems) ?></span></div>
+                    <div style="height:5px;background:#f3f4f6;border-radius:999px;overflow:hidden;"><div style="height:100%;width:<?= count($medallaItems)>0?round(($completedMedallaCount/count($medallaItems))*100):0 ?>%;background:linear-gradient(90deg,#FF6A00,#FFA500);border-radius:999px;transition:width 1s;"></div></div>
+                </div>
+            </div>
+            <!-- Logros Card (right) — Propuesta A: Próximo Logro -->
+            <?php
+                $loLastEarned = !empty($loEarned2) ? $loEarned2[count($loEarned2)-1] : null;
+                $loNextPending = null;
+                foreach ($logroItems as $lItem) {
+                    if (!$lItem['completed']) { $loNextPending = $lItem; break; }
+                }
+                $loProgressPct = count($logroItems) > 0 ? round((count($loEarned2)/count($logroItems))*100) : 0;
+            ?>
+            <div style="background:white;border-radius:1.5rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;display:flex;flex-direction:column;justify-content:space-between;">
+                <!-- Header -->
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+                    <h3 style="font-size:0.875rem;font-weight:600;color:#111827;margin:0;">Logros</h3>
+                    <span style="font-size:0.7rem;color:#9ca3af;font-weight:600;"><?= count($loEarned2) ?>/<?= count($logroItems) ?></span>
+                </div>
+
+                <?php if ($loLastEarned === null): ?>
+                <!-- Empty state: show first logro to unlock -->
+                <?php $loFirst = $logroItems[0] ?? null; $loFirstColor = $loFirst['color'] ?? '#FF6A00'; if (strpos($loFirstColor,'#')!==0 && strpos($loFirstColor,'linear')!==0) $loFirstColor='#FF6A00'; ?>
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0.5rem 0;">
+                    <div style="width:80px;height:80px;border-radius:50%;background:<?= htmlspecialchars($loFirstColor) ?>12;border:2px dashed <?= htmlspecialchars($loFirstColor) ?>50;display:flex;align-items:center;justify-content:center;margin:0 auto 0.75rem;animation:logroPulse 2s ease-in-out infinite;">
+                        <i class="<?= htmlspecialchars($loFirst['icon'] ?? 'bx bxs-star') ?>" style="font-size:2.2rem;color:<?= htmlspecialchars($loFirstColor) ?>;opacity:0.5;"></i>
+                    </div>
+                    <p style="font-size:0.72rem;font-weight:700;color:#374151;margin:0 0 4px;"><?= htmlspecialchars($loFirst['title'] ?? 'Primer Logro') ?></p>
+                    <p style="font-size:0.65rem;color:#9ca3af;margin:0 0 1rem;line-height:1.4;"><?= htmlspecialchars(mb_strimwidth($loFirst['description'] ?? '', 0, 55, '...')) ?></p>
+                    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:0.75rem;padding:0.4rem 0.75rem;">
+                        <p style="font-size:0.65rem;color:#ea580c;margin:0;font-weight:600;">¡Completa actividades para ganar tu primer logro!</p>
+                    </div>
+                </div>
+
+                <?php else: ?>
+                <!-- Logro más reciente ganado — protagonista -->
+                <?php
+                    $leFeat = $loLastEarned;
+                    $leFeatColor = $leFeat['color'] ?? '#FF6A00';
+                    if (strpos($leFeatColor,'#')!==0 && strpos($leFeatColor,'linear')!==0) $leFeatColor='#FF6A00';
+                    $leFeatGrad = strpos($leFeatColor,'linear')===0 ? $leFeatColor : "linear-gradient(135deg,{$leFeatColor},{$leFeatColor}cc)";
+                ?>
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;margin-bottom:1rem;">
+                    <!-- Big icon -->
+                    <div style="width:88px;height:88px;border-radius:50%;background:<?= $leFeatGrad ?>;box-shadow:0 8px 24px <?= htmlspecialchars($leFeatColor) ?>40;display:flex;align-items:center;justify-content:center;margin:0 auto 0.75rem;position:relative;transition:transform 0.3s;" onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform='scale(1)'">
+                        <i class="<?= htmlspecialchars($leFeat['icon'] ?? 'bx bxs-star') ?>" style="font-size:2.5rem;color:white;text-shadow:0 2px 8px rgba(0,0,0,0.2);"></i>
+                        <div style="position:absolute;bottom:-2px;right:-2px;width:26px;height:26px;background:#22c55e;border-radius:50%;border:3px solid white;display:flex;align-items:center;justify-content:center;">
+                            <span style="color:white;font-size:0.7rem;font-weight:bold;">✓</span>
+                        </div>
+                    </div>
+                    <p style="font-size:0.65rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 4px;">Último logro</p>
+                    <p style="font-size:0.9rem;font-weight:800;color:#111827;margin:0 0 4px;line-height:1.2;"><?= htmlspecialchars($leFeat['title']) ?></p>
+                    <p style="font-size:0.65rem;color:#6b7280;margin:0;line-height:1.4;"><?= htmlspecialchars(mb_strimwidth($leFeat['description'] ?? '', 0, 55, '...')) ?></p>
+                </div>
+
+                <?php if ($loNextPending !== null): ?>
+                <!-- Próximo logro por desbloquear -->
+                <?php
+                    $loNpColor = $loNextPending['color'] ?? '#6b7280';
+                    if (strpos($loNpColor,'#')!==0 && strpos($loNpColor,'linear')!==0) $loNpColor='#6b7280';
+                ?>
+                <div style="background:#f9fafb;border-radius:1rem;padding:0.65rem 0.875rem;display:flex;align-items:center;gap:0.625rem;margin-bottom:0.875rem;">
+                    <div style="width:34px;height:34px;border-radius:50%;background:#f3f4f6;border:2px dashed #d1d5db;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="<?= htmlspecialchars($loNextPending['icon'] ?? 'bx bxs-lock-alt') ?>" style="font-size:1rem;color:#9ca3af;"></i>
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <p style="font-size:0.6rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;margin:0;">Próximo</p>
+                        <p style="font-size:0.75rem;font-weight:700;color:#374151;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= htmlspecialchars($loNextPending['title']) ?></p>
+                    </div>
+                    <i class='bx bxs-lock-alt' style="font-size:0.875rem;color:#d1d5db;flex-shrink:0;"></i>
+                </div>
+                <?php endif; ?>
+                <?php endif; ?>
+
+                <!-- Progress bar -->
+                <div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.65rem;color:#9ca3af;margin-bottom:5px;font-weight:600;">
+                        <span>Progreso</span>
+                        <span style="color:#FF6A00;"><?= $loProgressPct ?>%</span>
+                    </div>
+                    <div style="height:6px;background:#f3f4f6;border-radius:999px;overflow:hidden;">
+                        <div style="height:100%;width:<?= $loProgressPct ?>%;background:linear-gradient(to right,#FF6A00,#FFA500);border-radius:999px;transition:width 1s ease-in-out;"></div>
+                    </div>
+                </div>
+            </div>
+            </div><!-- /lo-grid-5050 -->
+            <?php else: ?>
+            <!-- AchievementsCompact (Standard Medallas) -->
             <div style="background:white;border-radius:1.5rem;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,0.05);border:1px solid #f3f4f6;min-width:0;width:100%;box-sizing:border-box;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
                     <h3 style="font-size:0.875rem;font-weight:600;color:#111827;margin:0;">Medallas</h3>
@@ -633,6 +1043,7 @@ $completedMedallaCount = count(array_filter($medallaItems, fn($i) => $i['complet
                     </div>
                 </div>
             </div>
+            <?php endif; ?>
 
         </div>
     </div>
@@ -641,6 +1052,11 @@ $completedMedallaCount = count(array_filter($medallaItems, fn($i) => $i['complet
 <style>
 .v3-course-card:hover .v3-play-overlay { opacity: 1 !important; }
 .v3-course-card:hover img { transform: scale(1.1); }
+
+@keyframes logroPulse {
+    0%, 100% { transform: scale(1); opacity: 0.9; }
+    50% { transform: scale(1.05); opacity: 1; }
+}
 
 /* Horizontal scrolling for active courses */
 .v3-horizontal-scroll {

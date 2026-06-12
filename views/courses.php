@@ -37,13 +37,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete_course') {
         $delId = $_POST['course_id'] ?? '';
         if ($delId) {
-            // Prisma tiene OnDelete Cascade para ciertas cosas, pero hay que asegurar
-            // Eliminaremos en cascada manually o dejamos que FK Constraints actuen si están configuradas.
             $stmt = $pdo->prepare("DELETE FROM Course WHERE id = ?");
             if ($stmt->execute([$delId])) {
                 $successMsg = "Curso eliminado satisfactoriamente.";
             } else {
                 $errorMsg = "Error al eliminar el curso, verifica las relaciones restrictivas.";
+            }
+        }
+    }
+
+    // ── DUPLICAR CURSO (copia completa: curso + módulos + lecciones + tópicos) ──
+    if ($action === 'duplicate_course') {
+        $srcId = $_POST['course_id'] ?? '';
+        if ($srcId) {
+            try {
+                $pdo->beginTransaction();
+
+                // 1. Copiar el curso raíz
+                $srcCourse = $pdo->prepare("SELECT title, description, imageUrl, certificateId FROM Course WHERE id = ?");
+                $srcCourse->execute([$srcId]);
+                $orig = $srcCourse->fetch(PDO::FETCH_ASSOC);
+
+                $newCourseId = generateCuid();
+                $pdo->prepare("INSERT INTO Course (id, title, description, imageUrl, certificateId, demoUntilLessonId, createdAt, updatedAt)
+                               VALUES (?, ?, ?, ?, ?, NULL, NOW(), NOW())")
+                   ->execute([$newCourseId, $orig['title'] . ' (Copia)', $orig['description'], $orig['imageUrl'], $orig['certificateId']]);
+
+                // 2. Copiar módulos
+                $srcMods = $pdo->prepare("SELECT id, title, description, `order` FROM Module WHERE courseId = ? ORDER BY `order` ASC");
+                $srcMods->execute([$srcId]);
+                $modules = $srcMods->fetchAll(PDO::FETCH_ASSOC);
+
+                foreach ($modules as $mod) {
+                    $newModId = generateCuid();
+                    $pdo->prepare("INSERT INTO Module (id, courseId, title, description, `order`, createdAt, updatedAt)
+                                  VALUES (?, ?, ?, ?, ?, NOW(), NOW())")
+                       ->execute([$newModId, $newCourseId, $mod['title'], $mod['description'], $mod['order']]);
+
+                    // 3. Copiar lecciones del módulo
+                    $srcLessons = $pdo->prepare("SELECT id, title, description, content, videoUrl, documentUrl, presentationUrl, `order` FROM Lesson WHERE moduleId = ? ORDER BY `order` ASC");
+                    $srcLessons->execute([$mod['id']]);
+                    $lessons = $srcLessons->fetchAll(PDO::FETCH_ASSOC);
+
+                    foreach ($lessons as $les) {
+                        $newLesId = generateCuid();
+                        $pdo->prepare("INSERT INTO Lesson (id, moduleId, title, description, content, videoUrl, documentUrl, presentationUrl, `order`, createdAt, updatedAt)
+                                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())")
+                           ->execute([$newLesId, $newModId, $les['title'], $les['description'], $les['content'], $les['videoUrl'], $les['documentUrl'], $les['presentationUrl'], $les['order']]);
+
+                        // 4. Copiar tópicos de la lección
+                        $srcTopics = $pdo->prepare("SELECT title, description, content, videoUrl, documentUrl, presentationUrl, `order` FROM Topic WHERE lessonId = ? ORDER BY `order` ASC");
+                        $srcTopics->execute([$les['id']]);
+                        $topics = $srcTopics->fetchAll(PDO::FETCH_ASSOC);
+
+                        foreach ($topics as $top) {
+                            $pdo->prepare("INSERT INTO Topic (id, lessonId, title, description, content, videoUrl, documentUrl, presentationUrl, `order`, createdAt, updatedAt)
+                                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())")
+                               ->execute([generateCuid(), $newLesId, $top['title'], $top['description'], $top['content'], $top['videoUrl'], $top['documentUrl'], $top['presentationUrl'], $top['order']]);
+                        }
+                    }
+                }
+
+                $pdo->commit();
+                // Redirigir directo al Workshop del nuevo curso
+                echo "<script>window.location.href = 'index.php?view=course_workshop&id=" . urlencode($newCourseId) . "';</script>";
+                exit;
+
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                $errorMsg = "Error al duplicar el curso: " . $e->getMessage();
             }
         }
     }
@@ -90,7 +152,17 @@ function parseRoles($rolesString) {
 }
 ?>
 
-<div style="max-width: 1600px; margin: 0 auto; padding: 2rem; padding-bottom: 8rem; animation: fadeIn 0.7s ease-out;">
+<style>
+.courses-outer { max-width: 1600px; margin: 0 auto; padding: 2rem; padding-bottom: 8rem; animation: fadeIn 0.7s ease-out; }
+.courses-cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr)); gap:1.5rem; padding:1.5rem; background:#f8fafc; }
+@media(max-width:768px) {
+    .courses-outer { padding: 1rem; padding-bottom: 6rem; }
+    .courses-cards-grid { grid-template-columns:1fr; gap:1rem; padding:1rem; }
+}
+@keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+</style>
+
+<div class="courses-outer">
 
 
     <?php if ($successMsg): ?>
@@ -104,8 +176,8 @@ function parseRoles($rolesString) {
         </div>
     <?php endif; ?>
 
-    <main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: hidden; border: 1px solid rgba(0,0,0,0.04);">
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1.5rem; padding: 1.5rem; background: #f8fafc;">
+    <main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: visible; border: 1px solid rgba(0,0,0,0.04);">
+        <div class="courses-cards-grid">
             <!-- Add-Card para nuevo curso -->
             <div onclick="openModal('modalCreateCourse')" style="border: 2px dashed #cbd5e1; border-radius: 16px; background: transparent; cursor: pointer; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #64748b; transition: all 0.2s; min-height: 250px;" onmouseover="this.style.borderColor='#6366f1'; this.style.color='#4f46e5'; this.style.background='#eef2ff'; this.style.transform='translateY(-3px)';" onmouseout="this.style.borderColor='#cbd5e1'; this.style.color='#64748b'; this.style.background='transparent'; this.style.transform='translateY(0)';">
                 <i class='bx bx-plus' style="font-size: 3.5rem; margin-bottom: 0.5rem; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'"></i>
@@ -173,13 +245,22 @@ function parseRoles($rolesString) {
                         </div>
 
                         <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 1rem; margin-top: auto;">
-                            <form method="POST" style="margin: 0;" onsubmit="return confirm('¿Estás seguro de que deseas eliminar transversalmente este curso y todo su contenido? Se borrarán todos los avances relacionados a este Módulo.');">
-                                <input type="hidden" name="action" value="delete_course">
-                                <input type="hidden" name="course_id" value="<?php echo htmlspecialchars($course['id']); ?>">
-                                <button type="submit" style="background: none; border: none; padding: 0.5rem; color: #ef4444; cursor: pointer; border-radius: 8px; transition: background 0.2s;" onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='none'" title="Eliminar Curso">
-                                    <i class='bx bx-trash' style="font-size: 1.2rem;"></i>
-                                </button>
-                            </form>
+                            <div style="display:flex; gap:0.4rem; align-items:center;">
+                                <form method="POST" style="margin: 0;" onsubmit="return confirm('\u00bfEliminar este curso y todo su contenido?');">
+                                    <input type="hidden" name="action" value="delete_course">
+                                    <input type="hidden" name="course_id" value="<?php echo htmlspecialchars($course['id']); ?>">
+                                    <button type="submit" style="background: none; border: none; padding: 0.5rem; color: #ef4444; cursor: pointer; border-radius: 8px; transition: background 0.2s;" onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='none'" title="Eliminar Curso">
+                                        <i class='bx bx-trash' style="font-size: 1.2rem;"></i>
+                                    </button>
+                                </form>
+                                <form method="POST" style="margin: 0;" onsubmit="return confirm('\u00bfDuplicar este curso con todo su contenido?');">
+                                    <input type="hidden" name="action" value="duplicate_course">
+                                    <input type="hidden" name="course_id" value="<?php echo htmlspecialchars($course['id']); ?>">
+                                    <button type="submit" style="background: none; border: none; padding: 0.5rem; color: #6366f1; cursor: pointer; border-radius: 8px; transition: background 0.2s;" onmouseover="this.style.background='#e0e7ff'" onmouseout="this.style.background='none'" title="Duplicar Curso">
+                                        <i class='bx bx-copy' style="font-size: 1.2rem;"></i>
+                                    </button>
+                                </form>
+                            </div>
 
                             <a href="index.php?view=course_workshop&id=<?php echo urlencode($course['id']); ?>" style="display: inline-flex; align-items: center; gap: 0.5rem; color: #4f46e5; text-decoration: none; padding: 0.6rem 1.2rem; border-radius: 10px; font-weight: 700; font-size: 0.85rem; background: #e0e7ff; transition: background 0.2s;" onmouseover="this.style.background='#c7d2fe'" onmouseout="this.style.background='#e0e7ff'">
                                 ✏️ Configurar Curso
@@ -265,7 +346,7 @@ function parseRoles($rolesString) {
     
     foreach ($learningPaths as $lp) {
         $stmtLpc = $pdo->prepare("
-            SELECT c.id, c.title, c.description, c.imageUrl, lpc.order as lpOrder,
+            SELECT c.id, c.title, c.description, c.imageUrl, c.demoUntilLessonId, lpc.order as lpOrder,
                    (SELECT COUNT(l.id) FROM Lesson l JOIN Module m ON l.moduleId = m.id WHERE m.courseId = c.id) as lessonsCount,
                    (SELECT id FROM Quiz WHERE courseId = c.id LIMIT 1) as quizId,
                    (SELECT isCompleted FROM CourseProgress cp WHERE cp.courseId = c.id AND cp.userId = ?) as isCompleted,

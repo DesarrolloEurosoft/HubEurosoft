@@ -2,23 +2,110 @@
 session_start();
 require 'config/database.php'; // Importar conexión PDO
 
+$SECRET_KEY = "Hubeurosoft_2026_Secure_Key_!@#";
+
+// Autologin con cookie "Recordarme"
+if (!isset($_SESSION['user_id']) && isset($_COOKIE['hubeurosoft_remember']) && $_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $decrypted = openssl_decrypt($_COOKIE['hubeurosoft_remember'], 'AES-128-ECB', $SECRET_KEY);
+    if ($decrypted) {
+        $stmt = $pdo->prepare("SELECT u.*, c.isActive as companyActive, c.name as companyName, bu.name as buName FROM User u LEFT JOIN Company c ON u.companyId = c.id LEFT JOIN BusinessUnit bu ON u.businessUnitId = bu.id WHERE u.id = ? LIMIT 1");
+        $stmt->execute([$decrypted]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($user && ($user['role'] === 'ADMIN' || !isset($user['companyActive']) || $user['companyActive'] == 1)) {
+            $_SESSION['user_id'] = $user['id'];
+            $_SESSION['user_name'] = $user['name'];
+            $_SESSION['user_role'] = $user['role'];
+            $_SESSION['user_email'] = $user['email'];
+            $_SESSION['user_company'] = $user['companyId'];
+            $_SESSION['user_bu'] = $user['businessUnitId'];
+            $_SESSION['user_company_name'] = $user['companyName'] ?? null;
+            $_SESSION['user_bu_name'] = $user['buName'] ?? null;
+            
+            $stmtRole = $pdo->prepare("SELECT tr.name FROM TrainingRole tr JOIN _TrainingRoleToUser rtu ON rtu.A = tr.id WHERE rtu.B = ? LIMIT 1");
+            $stmtRole->execute([$user['id']]);
+            $trainingRoleName = strtoupper(trim($stmtRole->fetchColumn() ?: ''));
+            
+            if ($trainingRoleName === 'LECTOR OPERATIVO') {
+                header('Location: index.php?view=courses');
+            } else {
+                header('Location: index.php');
+            }
+            exit;
+        }
+    }
+}
+
 $error = '';
 
 // Procesamiento de login real a la Base de Datos
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = trim($_POST['email'] ?? '');
+    $loginInput = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
+    $companyParam = trim($_POST['companyParam'] ?? '');
+    $buParam = trim($_POST['buParam'] ?? '');
     
     try {
-        // Obtenemos los datos del usuario y también el estado isActive de su empresa (companyActive)
-        $stmt = $pdo->prepare("
-            SELECT u.*, c.isActive as companyActive 
+        // Obtenemos los datos del usuario, compañía y unidad de negocio
+        $sql = "
+            SELECT u.*, c.isActive as companyActive, c.name as companyName, bu.name as buName 
             FROM User u 
             LEFT JOIN Company c ON u.companyId = c.id 
-            WHERE u.email = ? LIMIT 1
-        ");
-        $stmt->execute([$email]);
-        $user = $stmt->fetch();
+            LEFT JOIN BusinessUnit bu ON u.businessUnitId = bu.id
+            WHERE u.email = ? 
+        ";
+        $params = [$loginInput];
+
+        if (!empty($companyParam)) {
+            // Permitir inicio de sesión con Nickname filtrado por la compañía en la URL
+            $sql .= " OR (u.nickname = ? AND REPLACE(REPLACE(LOWER(c.name), ' ', ''), '-', '') = ? ";
+            $cleanCompany = str_replace([' ', '-'], '', strtolower($companyParam));
+            $params[] = $loginInput;
+            $params[] = $cleanCompany;
+            
+            if (!empty($buParam)) {
+                $sql .= " AND REPLACE(REPLACE(LOWER(bu.name), ' ', ''), '-', '') = ? ";
+                $cleanBU = str_replace([' ', '-'], '', strtolower($buParam));
+                $params[] = $cleanBU;
+            }
+            $sql .= ") ";
+        } else {
+            // Sin URL personalizada: verificar si hay duplicados globales de nickname
+            $sql .= " OR u.nickname = ? ";
+            $params[] = $loginInput;
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            if (count($results) > 1) {
+                // Hay múltiples coincidencias. Verificamos si alguna coincide por EMAIL exacto.
+                $exactMatch = false;
+                foreach ($results as $r) {
+                    if (strtolower(trim($r['email'])) === strtolower($loginInput)) {
+                        $exactMatch = $r;
+                        break;
+                    }
+                }
+                
+                if ($exactMatch) {
+                    $user = $exactMatch;
+                } else {
+                    $error = "Tu usuario existe en múltiples instituciones. Por favor, usa el enlace de acceso personalizado que te proporcionó tu empresa.";
+                    $user = false;
+                }
+            } elseif (count($results) === 1) {
+                $user = $results[0];
+            } else {
+                $user = false;
+            }
+        }
+
+        if (!empty($companyParam)) {
+            $sql .= " LIMIT 1";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        }
 
         // Verificar la contraseña encriptada (bcrypt)
         if ($user && password_verify($password, $user['passwordHash'])) {
@@ -33,6 +120,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['user_email'] = $user['email'];
                 $_SESSION['user_company'] = $user['companyId'];
                 $_SESSION['user_bu'] = $user['businessUnitId'];
+                $_SESSION['user_company_name'] = $user['companyName'] ?? null;
+                $_SESSION['user_bu_name'] = $user['buName'] ?? null;
+                
+                // --- COOKIE RECORDARME ---
+                if (!empty($_POST['remember'])) {
+                    $encrypted = openssl_encrypt($user['id'], 'AES-128-ECB', $SECRET_KEY);
+                    setcookie('hubeurosoft_remember', $encrypted, time() + (86400 * 30), "/"); // Expira en 30 días
+                }
             
             // ----------- BITÁCORA DE ACCESOS (TRACKING) -----------
             if (!function_exists('generateCuid')) {
@@ -109,12 +204,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
             } // Cerramos la verificación de companyActive
         } else {
-            $error = "Credenciales incorrectas. Verifica tu correo y contraseña.";
+            if (empty($error)) {
+                $error = "Credenciales incorrectas. Verifica tu correo y contraseña.";
+            }
         }
     } catch (PDOException $e) {
         $error = "Error al conectar con la base de datos: Asegúrate de correr setup.php primero.";
     }
 }
+
+// Obtener los parámetros 'c' (compañía) y 'u' (unidad de negocio) de la URL
+$companyQuery = $_GET['c'] ?? '';
+$buQuery = $_GET['u'] ?? '';
+$displayCompany = htmlspecialchars(urldecode($companyQuery));
+$displayBU = htmlspecialchars(urldecode($buQuery));
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -336,11 +439,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             text-align: center;
             font-weight: 500;
         }
+
+        /* ── Móvil ≤ 480px ── */
+        @media (max-width: 480px) {
+            body {
+                padding: 1.5rem 1rem;
+            }
+            .auth-card {
+                padding: 1.75rem 1.25rem;
+                border-radius: 14px;
+                margin-top: 1.5rem !important;
+            }
+            .auth-header h2 { font-size: 1.35rem; }
+            .options-row { flex-wrap: wrap; gap: 0.5rem; }
+            .footer-text { margin-top: 1.5rem; }
+        }
     </style>
 </head>
 <body>
 
-    <div style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:420px;">
+    <div style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:420px;padding:0 1rem;box-sizing:border-box;">
     <!-- Fallback Logo / Actual Logo -->
     <div class="brand-logo" style="width:100%;">
         <img src="assets/images/logo.png" alt="Hub Eurosoft" onerror="this.outerHTML='<h1 style=\'color:#1a1d2e; font-weight:900; font-size: 2.5rem; letter-spacing:-0.03em;\'><i class=\'bx bxs-graduation\' style=\'color:#f97316;\'></i> Hub<span style=\'color:#f97316;\'>Eurosoft</span></h1>'">
@@ -350,7 +468,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="auth-card" style="margin-top:2rem;">
         <div class="auth-header">
             <h2>Iniciar sesión</h2>
-            <p>Accede a tu cuenta corporativa</p>
+            <?php if ($companyQuery && $buQuery): ?>
+                <p>Portal exclusivo de <strong style="color: var(--primary);"><?= $displayCompany ?></strong> - <?= $displayBU ?></p>
+            <?php elseif ($companyQuery): ?>
+                <p>Portal de acceso exclusivo para <strong style="color: var(--primary);"><?= $displayCompany ?></strong></p>
+            <?php else: ?>
+                <p>Accede a tu cuenta corporativa</p>
+            <?php endif; ?>
         </div>
 
         <?php if ($error): ?>
@@ -360,13 +484,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         <?php endif; ?>
 
-        <form action="login.php" method="POST">
+        <?php 
+            $actionUrl = "login.php";
+            if ($companyQuery) {
+                $actionUrl .= '?c=' . urlencode($companyQuery);
+                if ($buQuery) $actionUrl .= '&u=' . urlencode($buQuery);
+            }
+        ?>
+        <form action="<?= $actionUrl ?>" method="POST">
+            <input type="hidden" name="companyParam" value="<?= htmlspecialchars($companyQuery) ?>">
+            <input type="hidden" name="buParam" value="<?= htmlspecialchars($buQuery) ?>">
             
             <div class="form-group">
-                <label for="email" class="form-label">Correo Electrónico</label>
+                <label for="email" class="form-label">Correo o Nickname</label>
                 <div class="input-wrapper">
-                    <i class='bx bx-envelope left-icon'></i>
-                    <input type="email" id="email" name="email" class="form-control" placeholder="tu.nombre@empresa.com" required>
+                    <i class='bx bx-user left-icon'></i>
+                    <input type="text" id="email" name="email" class="form-control" placeholder="juan.perez o tu@empresa.com" required>
                 </div>
             </div>
 
@@ -379,13 +512,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
 
-            <div class="options-row">
-                <label class="checkbox-wrapper">
-                    <input type="checkbox" name="remember">
-                    <span>Recordarme</span>
-                </label>
-                <a href="#" class="forgot-link">¿Olvidaste tu contraseña?</a>
-            </div>
+        <?php 
+            $forgotUrl = "forgot_password.php";
+            if ($companyQuery) {
+                $forgotUrl .= '?c=' . urlencode($companyQuery);
+                if ($buQuery) $forgotUrl .= '&u=' . urlencode($buQuery);
+            }
+        ?>
+
+        <div class="options-row">
+            <label class="checkbox-wrapper">
+                <input type="checkbox" name="remember">
+                <span>Recordarme</span>
+            </label>
+            <a href="<?= $forgotUrl ?>" class="forgot-link">¿Olvidaste tu contraseña?</a>
+        </div>
 
             <button type="submit" class="btn-submit">
                 Iniciar Sesión <i class='bx bx-right-arrow-alt' style="font-size: 1.2rem;"></i>

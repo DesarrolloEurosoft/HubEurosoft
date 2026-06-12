@@ -176,8 +176,8 @@ elseif ($step === 'bus' && ($isAdmin || $isCoLeader)):
         <i class='bx bx-briefcase-alt-2'></i> <?= htmlspecialchars($coName) ?> <i class='bx bx-chevron-right' style="color:#cbd5e1;"></i> <i class='bx bx-network-chart'></i> Selecciona una Unidad de Negocio
     </div>
 
-    <main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: hidden; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 2rem;">
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; padding: 1.5rem; background: #f8fafc;">
+    <main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: visible; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 2rem;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 1rem; padding: 1.5rem; background: #f8fafc;">
         <?php foreach($bus as $b): ?>
             <a href="index.php?view=forums&step=forums&filter_co=<?= urlencode($viewCompanyId) ?>&filter_bu=<?= urlencode($b['id']) ?>" style="display: block; text-decoration: none; color: inherit;">
                 <div style="background: white; padding: 1.25rem; border-radius: 16px; height: 100%; display: flex; align-items: center; gap: 1rem; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; border: 1px solid #e2e8f0;" onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 10px 15px -3px rgba(0,0,0,0.1)';" onmouseout="this.style.transform='none'; this.style.boxShadow='none';">
@@ -277,19 +277,31 @@ elseif ($step === 'forums'):
 
         $isLeaderAdmin = ($isAdmin || $isCoLeader || $isBuLeader);
 
+        // Detectar TrainingRoles del usuario para control de visibilidad del foro LO
+        $isLectorOp = false;
+        $isModelador = false;
+        if (!$isLeaderAdmin && $userId) {
+            $stmtRoleNames = $pdo->prepare("SELECT LOWER(tr.name) FROM TrainingRole tr JOIN _TrainingRoleToUser rtu ON rtu.A = tr.id WHERE rtu.B = ?");
+            $stmtRoleNames->execute([$userId]);
+            foreach ($stmtRoleNames->fetchAll(PDO::FETCH_COLUMN) as $nm) {
+                if (str_contains($nm, 'lector') && str_contains($nm, 'operativo')) $isLectorOp = true;
+                if (str_contains($nm, 'modelad')) $isModelador = true;
+            }
+        }
+
         if (!$isLeaderAdmin) {
-            // Obtener el ID del TrainingRole de Lector Operativo (siempre visible para todos)
+            // Obtener el ID del TrainingRole de Lector Operativo
             $stmtLORole = $pdo->prepare("SELECT id FROM TrainingRole WHERE LOWER(name) LIKE '%lector%operativo%' LIMIT 1");
             $stmtLORole->execute();
             $loRoleId = $stmtLORole->fetchColumn();
 
             if (count($myTrainingRoles) > 0) {
                 $inSet = implode(',', array_map(function($id) use ($pdo) { return $pdo->quote($id); }, $myTrainingRoles));
-                // Incluir GENERAL + sus propios roles + el Foro de Lector Operativo (visible para todos)
-                $loExtra = $loRoleId ? ", " . $pdo->quote($loRoleId) : '';
+                // El foro LO se incluye solo para Modeladores (los LO ya lo tienen en $inSet por su propio rol)
+                $loExtra = ($loRoleId && $isModelador) ? ", " . $pdo->quote($loRoleId) : '';
                 $wForm .= " AND targetRole IN ('GENERAL', $inSet$loExtra)";
             } else {
-                $loExtra = $loRoleId ? " OR targetRole = " . $pdo->quote($loRoleId) : '';
+                $loExtra = ($loRoleId && $isModelador) ? " OR targetRole = " . $pdo->quote($loRoleId) : '';
                 $wForm .= " AND (targetRole = 'GENERAL'$loExtra)";
             }
         }
@@ -372,19 +384,50 @@ elseif ($step === 'forums'):
         $isLectorOp = (bool)$stmtLO->fetchColumn();
     }
     ?>
-    <?php if ($isLectorOp): ?>
-    <main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: hidden; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 2rem;">
+    <?php if ($isLectorOp):
+        // Resolver el forum_id del foro LO para redirigir
+        $loRedirectForumId = null;
+        foreach ($forums as $lf) {
+            if ($lf['targetRole'] !== 'GENERAL') { $loRedirectForumId = $lf['id']; break; }
+        }
+        if (!$loRedirectForumId && !empty($forums)) {
+            $loRedirectForumId = $forums[0]['id'];
+        }
+    ?>
+    <?php if ($loRedirectForumId): ?>
+    <script>
+        // Redirigir al LO directamente a la vista moderna de lista del foro
+        window.location.replace('index.php?view=forum_topic&forum_id=<?= urlencode($loRedirectForumId) ?>');
+    </script>
+    <!-- Fallback visual mientras redirige -->
+    <div style="display:flex;align-items:center;justify-content:center;padding:4rem;color:#6b7280;">
+        <i class='bx bx-loader-alt bx-spin' style="font-size:2rem;margin-right:0.75rem;color:#10b981;"></i>
+        <span style="font-size:0.9rem;font-weight:600;">Cargando tu foro...</span>
+    </div>
+    <?php else: ?>
+    <div style="text-align:center;padding:4rem 1rem;color:#9ca3af;">
+        <i class='bx bx-comment-x' style="font-size:3rem;margin-bottom:1rem;display:block;"></i>
+        <p>Aún no tienes foros asignados.</p>
+    </div>
+    <?php endif; ?>
 
-    <!-- HEADER — Foro Lector Operativo -->
-    <div style="background: linear-gradient(135deg, #fff7f0 0%, #fff 100%); border-bottom: 1px solid #ffe4cc; padding: 1.25rem 1.5rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.75rem;">
-        <div style="display:flex; align-items:center; gap:0.75rem;">
-            <div style="width:40px;height:40px;border-radius:10px;background:#FF6A00;display:flex;align-items:center;justify-content:center;color:white;font-size:1.2rem;flex-shrink:0;">
-                <i class='bx bx-chat'></i>
+
+
+
+                    <i class='bx bx-book-reader' style="font-size:2rem;color:white;"></i>
+                </div>
+                <div>
+                    <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.375rem;">
+                        <span style="background:rgba(255,255,255,0.2);color:white;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;padding:2px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.3);">Lector Operativo</span>
+                        <span style="background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.9);font-size:0.65rem;font-weight:700;padding:2px 10px;border-radius:999px;">Foro Especializado</span>
+                    </div>
+                    <h1 style="font-size:1.5rem;font-weight:800;margin:0 0 0.25rem;color:white;">Foro Lector Operativo</h1>
+                    <p style="font-size:0.8rem;color:rgba(255,255,255,0.8);margin:0;">Tu espacio para preguntar, proponer y compartir con tu equipo.</p>
+                </div>
             </div>
-            <div>
-                <h2 style="margin:0;font-size:1.1rem;font-weight:800;color:#1e293b;">Foro Lector Operativo</h2>
-                <p style="margin:0;font-size:0.8rem;color:#64748b;">Tu espacio para preguntar, proponer y compartir.</p>
-            </div>
+            <button onclick="document.getElementById('modalLO').classList.add('active')" style="display:inline-flex;align-items:center;gap:0.5rem;background:white;color:#059669;font-weight:700;font-size:0.875rem;padding:0.7rem 1.25rem;border-radius:1rem;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.15);transition:all 0.2s;white-space:nowrap;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                <i class='bx bx-edit-alt'></i> Nuevo mensaje
+            </button>
         </div>
     </div>
 
@@ -429,18 +472,24 @@ elseif ($step === 'forums'):
                     <label class="form-label" style="margin-bottom:0.75rem;display:block;font-weight:700;">¿Qué quieres hacer? <span style="color:#ef4444;">*</span></label>
                     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;">
                         <button type="button" onclick="setLOIntent('QUESTION',this)" id="lo_btn_Q"
-                            style="padding:0.9rem 0.4rem;border:2px solid #e2e8f0;border-radius:12px;background:#f8fafc;cursor:pointer;text-align:center;transition:all 0.2s;font-family:inherit;">
-                            <div style="font-size:1.6rem;margin-bottom:0.25rem;color:#3b82f6;"><i class='bx bx-help-circle'></i></div>
+                            style="padding:1rem 0.5rem;border:2px solid #e2e8f0;border-radius:12px;background:#f8fafc;cursor:pointer;text-align:center;transition:all 0.2s;font-family:inherit;">
+                            <div style="width:40px;height:40px;border-radius:10px;background:#dbeafe;display:flex;align-items:center;justify-content:center;margin:0 auto 0.5rem;">
+                                <i class='bx bx-help-circle' style="font-size:1.35rem;color:#2563eb;"></i>
+                            </div>
                             <div style="font-weight:700;font-size:0.75rem;color:#1e293b;">Tengo una pregunta</div>
                         </button>
                         <button type="button" onclick="setLOIntent('IMPROVEMENT',this)" id="lo_btn_I"
-                            style="padding:0.9rem 0.4rem;border:2px solid #e2e8f0;border-radius:12px;background:#f8fafc;cursor:pointer;text-align:center;transition:all 0.2s;font-family:inherit;">
-                            <div style="font-size:1.6rem;margin-bottom:0.25rem;color:#f59e0b;"><i class='bx bx-bulb'></i></div>
+                            style="padding:1rem 0.5rem;border:2px solid #e2e8f0;border-radius:12px;background:#f8fafc;cursor:pointer;text-align:center;transition:all 0.2s;font-family:inherit;">
+                            <div style="width:40px;height:40px;border-radius:10px;background:#fef3c7;display:flex;align-items:center;justify-content:center;margin:0 auto 0.5rem;">
+                                <i class='bx bx-bulb' style="font-size:1.35rem;color:#d97706;"></i>
+                            </div>
                             <div style="font-weight:700;font-size:0.75rem;color:#1e293b;">Tengo una propuesta</div>
                         </button>
                         <button type="button" onclick="setLOIntent('CONTRIBUTION',this)" id="lo_btn_C"
-                            style="padding:0.9rem 0.4rem;border:2px solid #e2e8f0;border-radius:12px;background:#f8fafc;cursor:pointer;text-align:center;transition:all 0.2s;font-family:inherit;">
-                            <div style="font-size:1.6rem;margin-bottom:0.25rem;color:#FF6A00;"><i class='bx bxs-star'></i></div>
+                            style="padding:1rem 0.5rem;border:2px solid #e2e8f0;border-radius:12px;background:#f8fafc;cursor:pointer;text-align:center;transition:all 0.2s;font-family:inherit;">
+                            <div style="width:40px;height:40px;border-radius:10px;background:#fff7ed;display:flex;align-items:center;justify-content:center;margin:0 auto 0.5rem;">
+                                <i class='bx bx-share-alt' style="font-size:1.35rem;color:#FF6A00;"></i>
+                            </div>
                             <div style="font-weight:700;font-size:0.75rem;color:#1e293b;">Quiero compartir algo</div>
                         </button>
                     </div>
@@ -525,25 +574,25 @@ elseif ($step === 'forums'):
         $stmtRec->execute([$loFeedForumId]);
         $recentTopics = $stmtRec->fetchAll();
     ?>
-    <div style="padding: 1rem 1.5rem 2rem;">
+    <div style="padding:0 0 2rem;">
 
         <?php if (!empty($pinnedTopics)): ?>
-        <!-- 📌 RESPUESTAS ÚTILES -->
-        <div style="margin-bottom: 2rem;">
-            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
-                <span style="font-size:1.1rem;">📌</span>
-                <h3 style="margin:0;font-size:0.95rem;font-weight:800;color:#1e293b;">Respuestas útiles para tu equipo</h3>
+        <!-- RESPUESTAS ÚTILES -->
+        <div style="margin-bottom:1.25rem;">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.875rem;">
+                <div style="width:28px;height:28px;background:#dcfce7;border-radius:8px;display:flex;align-items:center;justify-content:center;"><i class='bx bxs-star' style="color:#059669;font-size:0.9rem;"></i></div>
+                <h3 style="margin:0;font-size:0.9rem;font-weight:800;color:#111827;">Respuestas útiles para tu equipo</h3>
             </div>
-            <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            <div style="display:flex;flex-direction:column;gap:0.625rem;">
             <?php foreach ($pinnedTopics as $pt): ?>
                 <a href="index.php?view=forum_topic&forum_id=<?= urlencode($pt['forumId']) ?>&topic_id=<?= urlencode($pt['id']) ?>"
-                   style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem 1rem;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;text-decoration:none;transition:background 0.15s;"
-                   onmouseover="this.style.background='#fef3c7'" onmouseout="this.style.background='#fffbeb'">
-                    <div>
-                        <div style="font-weight:700;font-size:0.9rem;color:#1e293b;"><?= htmlspecialchars($pt['title']) ?></div>
-                        <div style="font-size:0.75rem;color:#92400e;margin-top:0.2rem;">por <?= htmlspecialchars($pt['authorName']) ?></div>
+                   style="display:flex;justify-content:space-between;align-items:center;padding:1rem 1.25rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:1rem;text-decoration:none;transition:all 0.2s;"
+                   onmouseover="this.style.background='#dcfce7';this.style.transform='translateY(-1px)'" onmouseout="this.style.background='#f0fdf4';this.style.transform='translateY(0)'">
+                    <div style="min-width:0;">
+                        <div style="font-weight:700;font-size:0.875rem;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?= htmlspecialchars($pt['title']) ?></div>
+                        <div style="font-size:0.72rem;color:#059669;margin-top:0.2rem;font-weight:600;">por <?= htmlspecialchars($pt['authorName']) ?></div>
                     </div>
-                    <div style="display:flex;align-items:center;gap:0.3rem;color:#92400e;font-size:0.8rem;font-weight:700;flex-shrink:0;margin-left:1rem;">
+                    <div style="display:flex;align-items:center;gap:0.3rem;color:#059669;font-size:0.8rem;font-weight:700;flex-shrink:0;margin-left:1rem;background:#dcfce7;padding:4px 10px;border-radius:999px;">
                         <i class='bx bx-message-rounded-dots'></i> <?= (int)$pt['replies'] ?>
                     </div>
                 </a>
@@ -552,27 +601,23 @@ elseif ($step === 'forums'):
         </div>
         <?php endif; ?>
 
-        <!-- 💬 ACTIVIDAD RECIENTE -->
+        <!-- ACTIVIDAD RECIENTE -->
         <?php if (!empty($recentTopics)): ?>
-        <div style="margin-bottom: 5rem;">
-            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
-                <span style="font-size:1.1rem;">💬</span>
-                <h3 style="margin:0;font-size:0.95rem;font-weight:800;color:#1e293b;">Actividad reciente en tu unidad</h3>
+        <div style="margin-bottom:5rem;">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.875rem;">
+                <div style="width:28px;height:28px;background:#f1f5f9;border-radius:8px;display:flex;align-items:center;justify-content:center;"><i class='bx bx-time' style="color:#64748b;font-size:0.9rem;"></i></div>
+                <h3 style="margin:0;font-size:0.9rem;font-weight:800;color:#111827;">Actividad reciente en tu unidad</h3>
             </div>
-            <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            <div style="display:flex;flex-direction:column;gap:0.625rem;">
             <?php foreach ($recentTopics as $rt): ?>
                 <a href="index.php?view=forum_topic&forum_id=<?= urlencode($rt['forumId']) ?>&topic_id=<?= urlencode($rt['id']) ?>"
-                   style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem 1rem;background:white;border:1px solid #e2e8f0;border-radius:10px;text-decoration:none;transition:background 0.15s;"
-                   onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                   style="display:flex;justify-content:space-between;align-items:center;padding:1rem 1.25rem;background:white;border:1px solid #f3f4f6;border-radius:1rem;text-decoration:none;transition:all 0.2s;box-shadow:0 1px 2px rgba(0,0,0,0.04);"
+                   onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)';this.style.borderColor='#bbf7d0';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='0 1px 2px rgba(0,0,0,0.04)';this.style.borderColor='#f3f4f6';this.style.transform='translateY(0)'">
                     <div style="min-width:0;">
-                        <div style="font-weight:600;font-size:0.9rem;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                            <?= htmlspecialchars($rt['title']) ?>
-                        </div>
-                        <div style="font-size:0.75rem;color:#64748b;margin-top:0.2rem;">
-                            por <?= htmlspecialchars($rt['authorName']) ?> · <?= date('d/m H:i', strtotime($rt['updatedAt'])) ?>
-                        </div>
+                        <div style="font-weight:600;font-size:0.875rem;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?= htmlspecialchars($rt['title']) ?></div>
+                        <div style="font-size:0.72rem;color:#6b7280;margin-top:0.2rem;">por <?= htmlspecialchars($rt['authorName']) ?> · <?= date('d/m H:i', strtotime($rt['updatedAt'])) ?></div>
                     </div>
-                    <div style="display:flex;align-items:center;gap:0.3rem;color:#64748b;font-size:0.8rem;font-weight:600;flex-shrink:0;margin-left:1rem;">
+                    <div style="display:flex;align-items:center;gap:0.3rem;color:#9ca3af;font-size:0.78rem;font-weight:600;flex-shrink:0;margin-left:1rem;">
                         <i class='bx bx-message-rounded-dots'></i> <?= (int)$rt['replies'] ?>
                     </div>
                 </a>
@@ -580,22 +625,23 @@ elseif ($step === 'forums'):
             </div>
         </div>
         <?php elseif (empty($pinnedTopics)): ?>
-        <div style="text-align:center;padding:3rem 1rem;color:#9ca3af;">
-            <i class='bx bx-comment-dots' style="font-size:2.5rem;margin-bottom:0.75rem;display:block;"></i>
-            <p style="margin:0;font-size:0.9rem;">Aún no hay actividad en tu unidad.<br>¡Sé el primero en preguntar!</p>
+        <div style="text-align:center;padding:4rem 1rem;">
+            <div style="width:64px;height:64px;background:#f0fdf4;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;"><i class='bx bx-comment-dots' style="font-size:2rem;color:#10b981;"></i></div>
+            <p style="margin:0;font-size:0.9rem;color:#6b7280;font-weight:600;">Aún no hay actividad en tu unidad.<br><span style="font-weight:400;">¡Sé el primero en preguntar!</span></p>
         </div>
         <?php endif; ?>
 
     </div>
 
-    <!-- FAB — único botón de acción para Lector Operativo -->
+    <!-- FAB — actualizado a verde del sistema LO -->
     <button onclick="document.getElementById('modalLO').classList.add('active')"
-       style="position:fixed;bottom:2rem;right:2rem;background:#FF6A00;color:white;padding:0.9rem 1.4rem;border-radius:50px;border:none;cursor:pointer;font-weight:800;font-size:0.95rem;box-shadow:0 4px 20px rgba(255,106,0,0.5);display:flex;align-items:center;gap:0.5rem;z-index:9999;transition:transform 0.2s;font-family:inherit;"
-       onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform='scale(1)'">
+       style="position:fixed;bottom:2rem;right:2rem;background:linear-gradient(135deg,#10b981,#059669);color:white;padding:0.9rem 1.4rem;border-radius:50px;border:none;cursor:pointer;font-weight:800;font-size:0.95rem;box-shadow:0 4px 20px rgba(16,185,129,0.45);display:flex;align-items:center;gap:0.5rem;z-index:9999;transition:all 0.2s;font-family:inherit;"
+       onmouseover="this.style.transform='scale(1.06)';this.style.boxShadow='0 8px 28px rgba(16,185,129,0.5)'" onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 4px 20px rgba(16,185,129,0.45)'">
         <i class='bx bx-edit' style="font-size:1.1rem;"></i> Nuevo mensaje
     </button>
 
         </main>
+
 
     <?php else: // LO sin foros — estado vacío ?>
         <div style="text-align:center;padding:4rem 1rem;color:#9ca3af;">
@@ -607,6 +653,7 @@ elseif ($step === 'forums'):
     <?php endif; // fin if(count>0) dentro del bloque LO ?>
 
 <?php else: // ── NON-LO — vista moderna de canales ──
+
         $buTotalTopics  = array_sum(array_column($forums, 'totalTopics'));
         $buTotalReplies = array_sum(array_column($forums, 'totalReplies'));
         $buTotalForums  = count($forums);
@@ -661,8 +708,21 @@ elseif ($step === 'forums'):
 
     <h1 style="font-size:1.75rem;font-weight:700;color:#111827;margin:0 0 1.5rem 0;">Foros</h1>
 
-    <!-- ── STATS — misma estructura que Inicio/Certificados ── -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1.25rem;margin-bottom:1.5rem;width:100%;">
+    <style>
+    .forum-stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1.25rem; margin-bottom:1.5rem; width:100%; }
+    .forum-cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr)); gap:1rem; padding:1.25rem 1.5rem 1.5rem; }
+    @media(max-width:768px) {
+        .forum-stats-grid { grid-template-columns:repeat(2,1fr); gap:0.75rem; }
+        .forum-stats-grid > div { padding: 1rem !important; }
+        .forum-stats-grid p:first-of-type { font-size:1.5rem !important; }
+    }
+    @media(max-width:480px) {
+        .forum-stats-grid { grid-template-columns:repeat(2,1fr); gap:0.5rem; }
+    }
+    </style>
+
+    <!-- ── STATS ── -->
+    <div class="forum-stats-grid">
 
 
         <!-- Canales — dark card -->
@@ -737,13 +797,18 @@ elseif ($step === 'forums'):
                 <p style="margin:0;font-size:0.9rem;">Aún no se han generado canales de discusión para este segmento.</p>
             </div>
         <?php else: ?>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:1rem;padding:1.25rem 1.5rem 1.5rem;">
+            <div class="forum-cards-grid">
             <?php foreach ($forums as $forum):
                 [$icon, $grad] = forumCardStyle($forum['trName'] ?? '', $forum['targetRole']);
-                // Detectar si es el foro LO visto por un usuario no-LO
+                // Detectar si es el foro LO
                 $trNameLower = strtolower($forum['trName'] ?? '');
                 $isLoCard = str_contains($trNameLower, 'lector') && str_contains($trNameLower, 'operativo');
-                $showAsSupport = $isLoCard && !$isLectorOp && !$isAdmin && !$isCoLeader && !$isBuLeader;
+                // Ocultar card LO para roles no autorizados (que no sean LO, Modelador ni Líder)
+                if ($isLoCard && !$isLectorOp && !$isModelador && !$isCoLeader && !$isBuLeader && !$isAdmin) {
+                    continue;
+                }
+                // Mostrar como card de apoyo (ambar) si es Modelador o Líder viendo el foro LO
+                $showAsSupport = $isLoCard && !$isLectorOp && ($isModelador || $isCoLeader || $isBuLeader || $isAdmin);
             ?>
                 <div class="forum-card-wrap">
                 <a href="index.php?view=forum_topic&forum_id=<?= urlencode($forum['id']) ?>"

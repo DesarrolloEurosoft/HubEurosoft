@@ -103,7 +103,7 @@ try {
     } 
     
     elseif ($action === 'mark_helpful') {
-        $stmtRep = $pdo->prepare("SELECT r.authorId, r.isHelpful, r.helpfulVotesCount, t.authorId as topicAuthorId FROM ForumReply r JOIN ForumTopic t ON r.topicId = t.id WHERE r.id = ?");
+        $stmtRep = $pdo->prepare("SELECT r.authorId, r.topicId, r.isHelpful, r.helpfulVotesCount, t.authorId as topicAuthorId FROM ForumReply r JOIN ForumTopic t ON r.topicId = t.id WHERE r.id = ?");
         $stmtRep->execute([$targetId]);
         $rep = $stmtRep->fetch(PDO::FETCH_ASSOC);
 
@@ -136,6 +136,8 @@ try {
         $earned = false;
         if ($newVotesCount >= 5 && $rep['isHelpful'] == 0) {
             $pdo->prepare("UPDATE ForumReply SET isHelpful = 1 WHERE id = ?")->execute([$targetId]);
+            // Propagar al tema para que el filtro "Resueltos" funcione
+            $pdo->prepare("UPDATE ForumTopic SET hasHelpfulReply = 1 WHERE id = ?")->execute([$rep['topicId']]);
             checkAndAwardGamification($pdo, $rep['authorId'], 'HELPFUL_ANSWER', "La comunidad coronó tu respuesta como Útil (+5 votos).");
             $earned = true;
         }

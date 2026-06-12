@@ -10,6 +10,18 @@ $uRow      = $stmtCmp->fetch(PDO::FETCH_ASSOC);
 $companyId = $uRow ? $uRow['companyId'] : null;
 $buId      = $uRow ? $uRow['businessUnitId'] : null;
 
+// ── Detectar si el usuario es Lector Operativo ───────────────────────────────
+$isLectorOp = false;
+if ($userId) {
+    $stmtLO = $pdo->prepare("SELECT 1 FROM TrainingRole tr JOIN _TrainingRoleToUser rtu ON rtu.A = tr.id WHERE rtu.B = ? AND LOWER(tr.name) LIKE '%lector%operativo%' LIMIT 1");
+    $stmtLO->execute([$userId]);
+    $isLectorOp = (bool)$stmtLO->fetchColumn();
+}
+// Etiquetas de contexto según rol
+$rankingTitle   = $isLectorOp ? 'Ranking · Lectores Operativos' : 'Ranking';
+$tabGeneralLbl  = $isLectorOp ? 'Mi Empresa' : 'General';
+$tabTeamLbl     = $isLectorOp ? 'Mi Unidad'  : null; // null = usar $buName
+
 $buName = 'Mi Equipo';
 if ($buId) {
     $stmtBN = $pdo->prepare("SELECT name FROM BusinessUnit WHERE id = ?");
@@ -76,6 +88,36 @@ if ($companyId) {
 }
 if (empty($usersTeam)) { $usersTeam = $usersGeneral; }
 
+// ── Para Lectores Operativos: reemplazar queries con filtro por TrainingRole ──
+if ($isLectorOp) {
+    $loJoin = "JOIN _TrainingRoleToUser rtu ON rtu.B = u.id JOIN TrainingRole tr ON rtu.A = tr.id AND LOWER(tr.name) LIKE '%lector%operativo%'";
+    if ($companyId && $buId) {
+        $s = $pdo->prepare("
+            SELECT u.id, u.name, u.firstName, u.lastName, u.totalPoints, u.image,
+                   COALESCE(bu.name,'Sin Unidad') as buName,
+                   (SELECT COUNT(cp.id) FROM CourseProgress cp WHERE cp.userId=u.id AND cp.isCompleted=1) as coursesCompleted
+            FROM User u LEFT JOIN BusinessUnit bu ON u.businessUnitId=bu.id
+            $loJoin
+            WHERE u.role='STUDENT' AND u.companyId=? AND u.businessUnitId=?
+            ORDER BY u.totalPoints DESC LIMIT 50");
+        $s->execute([$companyId, $buId]);
+        $usersTeam = $s->fetchAll(PDO::FETCH_ASSOC);
+    }
+    if ($companyId) {
+        $s = $pdo->prepare("
+            SELECT u.id, u.name, u.firstName, u.lastName, u.totalPoints, u.image,
+                   COALESCE(bu.name,'Sin Unidad') as buName,
+                   (SELECT COUNT(cp.id) FROM CourseProgress cp WHERE cp.userId=u.id AND cp.isCompleted=1) as coursesCompleted
+            FROM User u LEFT JOIN BusinessUnit bu ON u.businessUnitId=bu.id
+            $loJoin
+            WHERE u.role='STUDENT' AND u.companyId=?
+            ORDER BY u.totalPoints DESC LIMIT 50");
+        $s->execute([$companyId]);
+        $usersGeneral = $s->fetchAll(PDO::FETCH_ASSOC);
+    }
+    if (empty($usersTeam)) { $usersTeam = $usersGeneral; }
+}
+
 // ── 4. Tops ───────────────────────────────────────────────────────────────────
 $top5General = array_slice($usersGeneral, 0, 5);
 $top3Team    = array_slice($usersTeam,    0, 3);
@@ -107,17 +149,17 @@ $podiumColors = [
 $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc'];
 ?>
 
-<div style="max-width:1920px;margin:0 auto;padding:1rem 1.5rem 2rem;">
-<h1 style="font-size:1.75rem;font-weight:700;color:#111827;margin:0 0 1.5rem 0;">Ranking</h1>
+<div class="rank-page-wrap" style="max-width:1920px;margin:0 auto;padding:1rem 1.5rem 2rem;">
+<h1 style="font-size:1.75rem;font-weight:700;color:#111827;margin:0 0 1.5rem 0;"><?= htmlspecialchars($rankingTitle) ?></h1>
 
 <!-- ════════════════════════════════════════════════════════════════════════════
      PODIO — carrusel interno: slide 0 = Top 3 Mi Equipo | slide 1 = Top 5 General
      Ambos slides usan el mismo layout de columnas para altura uniforme.
 ════════════════════════════════════════════════════════════════════════════ -->
-<div style="background:linear-gradient(135deg,#111827,#1f2937,#111827);border-radius:1rem;padding:2rem;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);border:1px solid #374151;margin-bottom:1.5rem;position:relative;overflow:hidden;">
+<div class="lo-podium-card" style="background:linear-gradient(135deg,#111827,#1f2937,#111827);border-radius:1rem;padding:2rem;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);border:1px solid #374151;margin-bottom:1.5rem;position:relative;overflow:hidden;">
     <div style="position:absolute;top:0;right:0;width:256px;height:256px;background:rgba(255,106,0,0.1);border-radius:50%;transform:translate(50%,-50%);filter:blur(48px);pointer-events:none;"></div>
     <div style="position:absolute;bottom:0;left:0;width:256px;height:256px;background:rgba(234,179,8,0.1);border-radius:50%;transform:translate(-50%,50%);filter:blur(48px);pointer-events:none;"></div>
-    <div style="position:relative;z-index:10;">
+    <div class="lo-podium-inner" style="position:relative;z-index:10;">
 
         <!-- Header navegación -->
         <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:0.75rem;">
@@ -148,14 +190,14 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
             $p3ranks = [2,1,3];
             $p3h     = [2=>'144px',1=>'192px',3=>'112px'];
         ?>
-            <div style="display:flex;align-items:flex-end;justify-content:center;gap:1.5rem;max-width:700px;margin:0 auto;">
+            <div class="lo-pf" style="display:flex;align-items:flex-end;justify-content:center;gap:1.5rem;max-width:700px;margin:0 auto;">
             <?php foreach($p3order as $pi=>$pu):
                 $rk=$p3ranks[$pi]; $isF=($rk===1);
                 $sz=$isF?'96px':'80px'; $nm=getDisplayNameR($pu); ?>
-                <div style="flex:1;max-width:200px;">
+                <div style="flex:1 1 0%;min-width:0;max-width:200px;">
                     <div style="text-align:center;margin-bottom:0.75rem;">
                         <div style="position:relative;display:inline-block;margin-bottom:10px;">
-                            <div style="width:<?=$sz?>;height:<?=$sz?>;border-radius:50%;border:4px solid <?=$borderColors[$rk]?>;overflow:hidden;background:#374151;display:flex;align-items:center;justify-content:center;margin:0 auto;<?=$isF?'box-shadow:0 10px 15px rgba(234,179,8,0.5);':''?>">
+                            <div class="lo-pa" style="width:<?=$sz?>;height:<?=$sz?>;border-radius:50%;border:4px solid <?=$borderColors[$rk]?>;overflow:hidden;background:#374151;display:flex;align-items:center;justify-content:center;margin:0 auto;<?=$isF?'box-shadow:0 10px 15px rgba(234,179,8,0.5);':''?>">
                                 <?php if(!empty($pu['image'])):?><img src="<?=htmlspecialchars($pu['image']) ?>" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;font-size:1.5rem;font-weight:700;color:white;"><?=strtoupper(mb_substr($nm,0,1))?></span><?php else:?><span style="font-size:1.5rem;font-weight:700;color:white;"><?=strtoupper(mb_substr($nm,0,1))?></span><?php endif;?>
                             </div>
                             <div style="position:absolute;top:-14px;left:-14px;z-index:20;width:<?=$isF?'54px':'46px'?>;height:<?=$isF?'54px':'46px'?>;pointer-events:none;">
@@ -187,7 +229,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
             $p5h       = [1=>'192px',2=>'148px',3=>'112px',4=>'80px',5=>'56px'];
             $p5margin  = [1=>'0px',2=>'48px',3=>'80px',4=>'112px',5=>'136px']; // margin-bottom para alinear bases
         ?>
-            <div style="display:flex;align-items:flex-end;justify-content:center;gap:1rem;max-width:800px;margin:0 auto;">
+            <div class="lo-pf" style="display:flex;align-items:flex-end;justify-content:center;gap:1rem;max-width:800px;margin:0 auto;">
             <?php foreach($p5indices as $pos => $arrIdx):
                 if (!isset($top5General[$arrIdx])) continue;
                 $tu   = $top5General[$arrIdx];
@@ -197,10 +239,10 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
                 $tNm  = getDisplayNameR($tu);
                 $isMe = ($tu['id'] === $userId);
             ?>
-                <div style="flex:1;max-width:<?=$isF?'160px':($rk<=3?'140px':'120px')?>;<?=$isMe?'filter:drop-shadow(0 0 8px rgba(255,106,0,0.6));':''?>">
+                <div style="flex:1 1 0%;min-width:0;max-width:<?=$isF?'160px':($rk<=3?'140px':'120px')?>;<?=$isMe?'filter:drop-shadow(0 0 8px rgba(255,106,0,0.6));':''?>">
                     <div style="text-align:center;margin-bottom:0.6rem;">
                         <div style="position:relative;display:inline-block;margin-bottom:8px;">
-                            <div style="width:<?=$sz?>;height:<?=$sz?>;border-radius:50%;border:3px solid <?=$borderColors[$rk]?>;overflow:hidden;background:#374151;display:flex;align-items:center;justify-content:center;margin:0 auto;<?=$isF?'box-shadow:0 8px 20px rgba(234,179,8,0.5);':''?>">
+                            <div class="lo-pa" style="width:<?=$sz?>;height:<?=$sz?>;border-radius:50%;border:3px solid <?=$borderColors[$rk]?>;overflow:hidden;background:#374151;display:flex;align-items:center;justify-content:center;margin:0 auto;<?=$isF?'box-shadow:0 8px 20px rgba(234,179,8,0.5);':''?>">
                                 <?php if(!empty($tu['image'])):?><img src="<?=htmlspecialchars($tu['image']) ?>" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;font-size:1.1rem;font-weight:700;color:white;"><?=strtoupper(mb_substr($tNm,0,1))?></span><?php else:?><span style="font-size:1.1rem;font-weight:700;color:white;"><?=strtoupper(mb_substr($tNm,0,1))?></span><?php endif;?>
                             </div>
                             <!-- Badge de posición -->
@@ -230,7 +272,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
      STATS FILA 1
      [Tu Posición: doble columna BU + General]  [Últimos Puntos]
 ════════════════════════════════════════════════════════════════════════════ -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem;">
+<div class="lo-2col-grid" style="margin-bottom:1.25rem;">
 
     <!-- Tu Posición: muestra ambos rangos simultáneamente -->
     <div style="background:linear-gradient(135deg,#111827,#1f2937,#111827);border-radius:1rem;padding:1.5rem;border:1px solid #374151;color:white;position:relative;overflow:hidden;">
@@ -247,7 +289,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
             </div>
 
             <!-- Dos columnas: Mi Equipo | General -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem;">
+            <div class="rank-grid-2" style="margin-bottom:1rem;">
                 <!-- Mi Equipo -->
                 <div style="background:rgba(255,106,0,0.1);border:1px solid rgba(255,106,0,0.25);border-radius:12px;padding:12px;text-align:center;">
                     <p style="font-size:0.65rem;font-weight:700;color:#FF6A00;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 4px;">Mi Equipo</p>
@@ -265,7 +307,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
             </div>
 
             <!-- Cursos + Para Top 3 -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="rank-grid-2" style="gap:10px;">
                 <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:8px 12px;border:1px solid rgba(255,255,255,0.08);">
                     <p style="font-size:0.7rem;color:#9ca3af;margin:0;">Cursos completados</p>
                     <p style="font-size:1.1rem;font-weight:700;color:white;margin:0;"><?= $myDoneGen ?></p>
@@ -309,7 +351,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
 <!-- ════════════════════════════════════════════════════════════════════════════
      STATS FILA 2: Participantes + Para Top 3  (se actualizan con el tab)
 ════════════════════════════════════════════════════════════════════════════ -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.5rem;">
+<div class="lo-2col-grid" style="margin-bottom:1.5rem;">
     <div style="background:white;border-radius:1rem;padding:1.5rem;border:1px solid #f3f4f6;">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem;">
             <div style="width:48px;height:48px;border-radius:1rem;background:linear-gradient(135deg,#3b82f6,#2563eb);display:flex;align-items:center;justify-content:center;"><i class='bx bx-group' style="color:white;font-size:1.5rem;"></i></div>
@@ -335,11 +377,11 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
     <div style="display:flex;align-items:center;gap:8px;background:#f3f4f6;border-radius:999px;padding:5px;">
         <button id="tabGeneral" onclick="switchRankTab('general')"
             style="flex:1;padding:10px 20px;border-radius:999px;font-size:0.875rem;font-weight:600;border:none;cursor:pointer;transition:all 0.2s;background:white;color:#111827;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
-            <i class='bx bx-globe' style="margin-right:4px;vertical-align:-2px;"></i>General
+            <i class='bx bx-globe' style="margin-right:4px;vertical-align:-2px;"></i><?= htmlspecialchars($tabGeneralLbl) ?>
         </button>
         <button id="tabTeam" onclick="switchRankTab('team')"
             style="flex:1;padding:10px 20px;border-radius:999px;font-size:0.875rem;font-weight:600;border:none;cursor:pointer;transition:all 0.2s;background:transparent;color:#6b7280;">
-            <i class='bx bx-group' style="margin-right:4px;vertical-align:-2px;"></i><?= htmlspecialchars($buName) ?>
+            <i class='bx bx-group' style="margin-right:4px;vertical-align:-2px;"></i><?= htmlspecialchars($tabTeamLbl ?? $buName) ?>
         </button>
     </div>
 </div>
@@ -351,7 +393,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
     <div style="background:white;border-radius:1rem;border:1px solid #f3f4f6;overflow:hidden;">
         <div style="padding:1.25rem;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center;">
             <div><h2 style="font-size:1.25rem;font-weight:700;color:#111827;margin:0;">Clasificación General</h2><p style="font-size:0.875rem;color:#6b7280;margin:0;">Posiciones del 4 en adelante · Toda la empresa</p></div>
-            <div style="position:relative;width:200px;"><i class='bx bx-search' style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9ca3af;"></i><input type="text" id="rankSearchGeneral" placeholder="Filtrar..." oninput="filterRanking('general')" style="width:100%;padding:8px 12px 8px 36px;background:#f9fafb;border-radius:999px;border:1px solid #e5e7eb;font-size:0.875rem;outline:none;box-sizing:border-box;" onfocus="this.style.boxShadow='0 0 0 2px #FF6A00'" onblur="this.style.boxShadow='none'"></div>
+            <div class="rank-search-wrap" style="position:relative;width:200px;"><i class='bx bx-search' style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9ca3af;"></i><input type="text" id="rankSearchGeneral" placeholder="Filtrar..." oninput="filterRanking('general')" style="width:100%;padding:8px 12px 8px 36px;background:#f9fafb;border-radius:999px;border:1px solid #e5e7eb;font-size:0.875rem;outline:none;box-sizing:border-box;" onfocus="this.style.boxShadow='0 0 0 2px #FF6A00'" onblur="this.style.boxShadow='none'"></div>
         </div>
         <?php $restGen=array_slice($usersGeneral,3); if(empty($restGen)):?>
         <div style="padding:3rem;text-align:center;"><i class='bx bx-trophy' style="font-size:2rem;color:#e5e7eb;display:block;margin-bottom:12px;"></i><p style="font-weight:600;color:#6b7280;">No hay más participantes</p></div>
@@ -363,7 +405,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
                 <div style="width:44px;height:44px;border-radius:50%;background:#111827;display:flex;align-items:center;justify-content:center;color:white;overflow:hidden;flex-shrink:0;border:2px solid #e5e7eb;"><?php if(!empty($ru['image'])):?><img src="<?=htmlspecialchars($ru['image']) ?>" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;font-size:1rem;font-weight:700;"><?=strtoupper(mb_substr($dn,0,1))?></span><?php else:?><span style="font-size:1rem;font-weight:700;"><?=strtoupper(mb_substr($dn,0,1))?></span><?php endif;?></div>
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;"><h3 style="font-weight:700;color:#111827;margin:0;font-size:0.95rem;"><?=htmlspecialchars($dn)?></h3><?php if($isMe):?><span style="padding:2px 8px;background:#FF6A00;color:white;font-size:0.7rem;font-weight:700;border-radius:999px;">Tú</span><?php endif;?></div>
-                    <div style="display:flex;align-items:center;gap:1rem;font-size:0.8rem;color:#6b7280;"><span style="display:flex;align-items:center;gap:3px;"><i class='bx bx-star'></i><?=$ru['coursesCompleted']?> cursos</span><span><?=htmlspecialchars($ru['buName']??'Sin Unidad')?></span></div>
+                    <div class="rank-sub-info" style="display:flex;align-items:center;gap:1rem;font-size:0.8rem;color:#6b7280;"><span style="display:flex;align-items:center;gap:3px;"><i class='bx bx-star'></i><?=$ru['coursesCompleted']?> cursos</span><span><?=htmlspecialchars($ru['buName']??'Sin Unidad')?></span></div>
                 </div>
                 <div style="text-align:right;flex-shrink:0;"><p style="font-size:1.4rem;font-weight:700;color:#111827;margin:0;"><?=number_format((int)$ru['totalPoints'])?></p><p style="font-size:0.7rem;color:#6b7280;margin:0;">puntos</p></div>
                 <div style="width:30px;flex-shrink:0;"><div style="width:30px;height:30px;border-radius:50%;background:<?=$isMe?'#dcfce7':'#f3f4f6'?>;display:flex;align-items:center;justify-content:center;"><?php if($isMe):?><i class='bx bx-chevron-up' style="color:#16a34a;"></i><?php else:?><span style="color:#9ca3af;font-size:0.85rem;">-</span><?php endif;?></div></div>
@@ -380,7 +422,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
     <div style="background:white;border-radius:1rem;border:1px solid #f3f4f6;overflow:hidden;">
         <div style="padding:1.25rem;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center;">
             <div><h2 style="font-size:1.25rem;font-weight:700;color:#111827;margin:0;">Clasificación — <?=htmlspecialchars($buName)?></h2><p style="font-size:0.875rem;color:#6b7280;margin:0;">Posiciones del 4 en adelante · Tu unidad</p></div>
-            <div style="position:relative;width:200px;"><i class='bx bx-search' style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9ca3af;"></i><input type="text" id="rankSearchTeam" placeholder="Filtrar..." oninput="filterRanking('team')" style="width:100%;padding:8px 12px 8px 36px;background:#f9fafb;border-radius:999px;border:1px solid #e5e7eb;font-size:0.875rem;outline:none;box-sizing:border-box;" onfocus="this.style.boxShadow='0 0 0 2px #FF6A00'" onblur="this.style.boxShadow='none'"></div>
+            <div class="rank-search-wrap" style="position:relative;width:200px;"><i class='bx bx-search' style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9ca3af;"></i><input type="text" id="rankSearchTeam" placeholder="Filtrar..." oninput="filterRanking('team')" style="width:100%;padding:8px 12px 8px 36px;background:#f9fafb;border-radius:999px;border:1px solid #e5e7eb;font-size:0.875rem;outline:none;box-sizing:border-box;" onfocus="this.style.boxShadow='0 0 0 2px #FF6A00'" onblur="this.style.boxShadow='none'"></div>
         </div>
         <?php $restTeam=array_slice($usersTeam,3); if(empty($restTeam)):?>
         <div style="padding:3rem;text-align:center;"><i class='bx bx-trophy' style="font-size:2rem;color:#e5e7eb;display:block;margin-bottom:12px;"></i><p style="font-weight:600;color:#6b7280;">No hay más participantes en tu equipo</p></div>
@@ -392,7 +434,7 @@ $borderColors = [1=>'#facc15',2=>'#9ca3af',3=>'#f97316',4=>'#60a5fa',5=>'#c084fc
                 <div style="width:44px;height:44px;border-radius:50%;background:#111827;display:flex;align-items:center;justify-content:center;color:white;overflow:hidden;flex-shrink:0;border:2px solid #e5e7eb;"><?php if(!empty($ru['image'])):?><img src="<?=htmlspecialchars($ru['image']) ?>" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;font-size:1rem;font-weight:700;"><?=strtoupper(mb_substr($dn,0,1))?></span><?php else:?><span style="font-size:1rem;font-weight:700;"><?=strtoupper(mb_substr($dn,0,1))?></span><?php endif;?></div>
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;"><h3 style="font-weight:700;color:#111827;margin:0;font-size:0.95rem;"><?=htmlspecialchars($dn)?></h3><?php if($isMe):?><span style="padding:2px 8px;background:#FF6A00;color:white;font-size:0.7rem;font-weight:700;border-radius:999px;">Tú</span><?php endif;?></div>
-                    <div style="display:flex;align-items:center;gap:3px;font-size:0.8rem;color:#6b7280;"><i class='bx bx-star'></i><?=$ru['coursesCompleted']?> cursos</div>
+                    <div class="rank-sub-info" style="display:flex;align-items:center;gap:1rem;font-size:0.8rem;color:#6b7280;"><i class='bx bx-star'></i><?=$ru['coursesCompleted']?> cursos</div>
                 </div>
                 <div style="text-align:right;flex-shrink:0;"><p style="font-size:1.4rem;font-weight:700;color:#111827;margin:0;"><?=number_format((int)$ru['totalPoints'])?></p><p style="font-size:0.7rem;color:#6b7280;margin:0;">puntos</p></div>
                 <div style="width:30px;flex-shrink:0;"><div style="width:30px;height:30px;border-radius:50%;background:<?=$isMe?'#dcfce7':'#f3f4f6'?>;display:flex;align-items:center;justify-content:center;"><?php if($isMe):?><i class='bx bx-chevron-up' style="color:#16a34a;"></i><?php else:?><span style="color:#9ca3af;font-size:0.85rem;">-</span><?php endif;?></div></div>
@@ -468,3 +510,11 @@ function filterRanking(tab) {
     });
 }
 </script>
+
+<style>
+.rank-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+@media (max-width: 1023px) {
+    .rank-grid-2 { grid-template-columns: 1fr; gap: 10px; }
+}
+</style>

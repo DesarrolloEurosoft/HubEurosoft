@@ -121,7 +121,16 @@ if (!empty($pendingEvaluations)) {
 }
 ?>
 
-<div style="max-width: 1400px; margin: 0 auto; padding: 2rem; padding-bottom: 8rem; animation: fadeIn 0.7s ease-out; font-family: 'Inter', sans-serif;">
+<style>
+.quizzes-outer { max-width: 1400px; margin: 0 auto; padding: 2rem; padding-bottom: 8rem; animation: fadeIn 0.7s ease-out; font-family: 'Inter', sans-serif; }
+.quiz-cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr)); gap:1.5rem; background:#f8fafc; padding:1.5rem; border-radius:16px; }
+@media(max-width:768px) {
+    .quizzes-outer { padding: 1rem; padding-bottom: 6rem; }
+    .quiz-cards-grid { grid-template-columns:1fr; gap:1rem; padding:1rem; }
+}
+</style>
+
+<div class="quizzes-outer">
 
 
     <?php if ($successMsg): ?>
@@ -148,7 +157,11 @@ if (!empty($pendingEvaluations)) {
         </div>
     <?php endif; ?>
 
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1.5rem;">
+    <style>
+    .quiz-cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr)); gap:1.5rem; background:#f8fafc; padding:1.5rem; border-radius:16px; }
+    @media(max-width:768px){ .quiz-cards-grid { grid-template-columns:1fr; gap:1rem; } }
+    </style>
+        <div class="quiz-cards-grid">
             <!-- Add-Card para Nueva Evaluación -->
             <div onclick="openModal('modalCreateQuizGlobal')" style="border: 2px dashed #cbd5e1; border-radius: 16px; background: transparent; cursor: pointer; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #64748b; transition: all 0.2s; min-height: 250px;" onmouseover="this.style.borderColor='#6366f1'; this.style.color='#4f46e5'; this.style.background='#eef2ff'; this.style.transform='translateY(-3px)';" onmouseout="this.style.borderColor='#cbd5e1'; this.style.color='#64748b'; this.style.background='transparent'; this.style.transform='translateY(0)';">
                 <i class='bx bx-plus' style="font-size: 3.5rem; margin-bottom: 0.5rem; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'"></i>

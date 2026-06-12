@@ -50,11 +50,45 @@ if (count($parts) > 1) {
 }
 $initials = mb_strtoupper($initials, 'UTF-8');
 
+// Obtener los perfiles formativos del usuario activo para mostrar en el menú
+$sessionUserId = $_SESSION['user_id'] ?? '';
+$userTrainingRolesStr = '';
+$isTopLectorOp = false;
+if ($sessionUserId && isset($pdo)) {
+    try {
+        $trStmt = $pdo->prepare("
+            SELECT tr.name 
+            FROM TrainingRole tr
+            JOIN _TrainingRoleToUser rtu ON rtu.A = tr.id
+            WHERE rtu.B = ?
+        ");
+        $trStmt->execute([$sessionUserId]);
+        $trRoles = $trStmt->fetchAll(PDO::FETCH_COLUMN);
+        
+        if ($trRoles) {
+            $userTrainingRolesStr = implode(', ', $trRoles);
+            foreach ($trRoles as $rol) {
+                if (stripos($rol, 'lector') !== false && stripos($rol, 'operativo') !== false) {
+                    $isTopLectorOp = true;
+                    break;
+                }
+            }
+        } else {
+            $userTrainingRolesStr = 'Sin perfil asignado';
+        }
+    } catch(Exception $e) {
+        $userTrainingRolesStr = 'Desconocido';
+    }
+}
 ?>
 
 <nav class="v3-topnav">
-    <div class="v3-topnav-logo" style="margin-left: -2rem;">
-        <img src="assets/images/logo.png" alt="Hub Eurosoft" style="height: 48px; width: auto; display: block;">
+    <!-- Logo -->
+    <div class="v3-topnav-logo">
+        <a href="index.php" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+            <img src="assets/images/logo.png" alt="Hub Eurosoft" style="height:48px;width:auto;object-fit:contain;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+            <div class="v3-topnav-logo-icon" style="display:none;">HE</div>
+        </a>
     </div>
 
     <!-- Navigation Pills -->
@@ -82,7 +116,7 @@ $initials = mb_strtoupper($initials, 'UTF-8');
         <!-- Mobile hamburger -->
         <button class="v3-topnav-btn v3-topnav-btn-light v3-mobile-toggle" 
                 onclick="toggleMobileMenu()" 
-                style="display: none;">
+                aria-label="Menú">
             <i class='bx bx-menu'></i>
         </button>
 
@@ -130,9 +164,14 @@ $initials = mb_strtoupper($initials, 'UTF-8');
             </button>
             <div id="v3-profile-dropdown" style="display:none;position:absolute;top:120%;right:0;width:max-content;min-width:200px;max-width:300px;background:white;border-radius:16px;box-shadow:0 10px 25px rgba(0,0,0,0.12);border:1px solid #f3f4f6;z-index:1000;overflow:hidden;">
                 <div style="padding:0.5rem;">
-                    <a href="index.php?view=settings" style="display:flex;align-items:center;gap:10px;padding:10px 14px;color:#111827;text-decoration:none;font-size:0.875rem;font-weight:600;border-radius:10px;transition:background 0.2s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'">
-                        <i class='bx bx-user-circle' style="font-size:1.2rem;color:#FF6A00;"></i> 
-                        <span style="overflow:hidden;text-overflow:ellipsis;">Perfil <span style="font-weight: 400; color: #6b7280; font-size: 0.8rem;">(<?= htmlspecialchars($userName ?? 'User') ?>)</span></span>
+                    <a href="index.php?view=settings" style="display:flex;flex-direction:column;gap:4px;padding:10px 14px;color:#111827;text-decoration:none;font-size:0.875rem;font-weight:600;border-radius:10px;transition:background 0.2s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'">
+                        <div style="display:flex;align-items:center;gap:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                            <i class='bx bx-user-circle' style="font-size:1.2rem;color:#FF6A00;"></i> 
+                            <span style="overflow:hidden;text-overflow:ellipsis;">Perfil <span style="font-weight: 400; color: #6b7280; font-size: 0.8rem;">(<?= htmlspecialchars($userName ?? 'User') ?>)</span></span>
+                        </div>
+                        <div style="padding-left:28px;font-size:0.75rem;color:#8b5cf6;font-weight:600;display:flex;align-items:center;gap:4px;white-space:normal;line-height:1.2;">
+                            <i class='bx bx-briefcase-alt-2'></i> <?= htmlspecialchars($userTrainingRolesStr) ?>
+                        </div>
                     </a>
                     <div style="height:1px;background:#f3f4f6;margin:4px 0;"></div>
                     <a href="logout.php" style="display:flex;align-items:center;gap:10px;padding:10px 14px;color:#ef4444;text-decoration:none;font-size:0.875rem;font-weight:600;border-radius:10px;transition:background 0.2s;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='transparent'">
@@ -149,7 +188,8 @@ $initials = mb_strtoupper($initials, 'UTF-8');
     <div class="v3-mobile-menu-inner">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
             <div class="v3-topnav-logo">
-                <img src="assets/images/logo.png" alt="Hub Eurosoft" style="height: 48px; width: auto; display: block;">
+                <img src="assets/images/logo.png" alt="Hub Eurosoft" style="height:48px;width:auto;object-fit:contain;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+                <div class="v3-topnav-logo-icon" style="display:none;">HE</div>
             </div>
             <button onclick="toggleMobileMenu()" style="background: none; border: none; font-size: 1.5rem; color: #6b7280; cursor: pointer;">
                 <i class='bx bx-x'></i>
@@ -170,12 +210,7 @@ $initials = mb_strtoupper($initials, 'UTF-8');
             </a>
         <?php endforeach; ?>
         
-        <?php if ($isAdminNav): ?>
-            <a href="index.php?view=activity_log" class="v3-mobile-nav-item <?= ($currentView === 'activity_log') ? 'active' : '' ?>">
-                <i class='bx bx-receipt' style="font-size: 1.2rem;"></i>
-                Bitácora de Accesos
-            </a>
-        <?php endif; ?>
+
         
         <div style="margin-top: auto; padding-top: 1rem; border-top: 1px solid #f3f4f6;">
             <a href="logout.php" class="v3-mobile-nav-item" style="color: #ef4444;">
@@ -187,8 +222,10 @@ $initials = mb_strtoupper($initials, 'UTF-8');
 </div>
 
 <style>
+    .v3-mobile-toggle { display: none !important; }
     @media (max-width: 1023px) {
         .v3-mobile-toggle { display: flex !important; }
+        .v3-nav-pills { display: none !important; }
     }
 </style>
 
@@ -351,3 +388,135 @@ function openV3NotifHistory() {
 fetchV3Notifs();
 setInterval(fetchV3Notifs, 45000);
 </script>
+
+<?php if ($isTopLectorOp): ?>
+<!-- NAVEGACIÓN INFERIOR (Solo Lector Operativo) -->
+<nav class="v3-bottom-nav" id="v3-bottom-nav">
+    <a href="index.php?view=dashboard"
+       class="v3-bnav-item <?= ($currentView === 'dashboard') ? 'active' : '' ?>">
+        <span class="v3-bnav-indicator"></span>
+        <i class='bx bx-home-alt'></i>
+        <span class="v3-bnav-label">Inicio</span>
+    </a>
+    <a href="index.php?view=courses"
+       class="v3-bnav-item <?= ($currentView === 'courses' || $currentView === 'lesson') ? 'active' : '' ?>">
+        <span class="v3-bnav-indicator"></span>
+        <i class='bx bx-book-open'></i>
+        <span class="v3-bnav-label">Cursos</span>
+    </a>
+    <a href="index.php?view=ranking"
+       class="v3-bnav-item <?= ($currentView === 'ranking') ? 'active' : '' ?>">
+        <span class="v3-bnav-indicator"></span>
+        <i class='bx bx-trophy'></i>
+        <span class="v3-bnav-label">Ranking</span>
+    </a>
+    <a href="index.php?view=certificates"
+       class="v3-bnav-item <?= ($currentView === 'certificates') ? 'active' : '' ?>">
+        <span class="v3-bnav-indicator"></span>
+        <i class='bx bx-award'></i>
+        <span class="v3-bnav-label">Certificados</span>
+    </a>
+    <a href="index.php?view=forums"
+       class="v3-bnav-item <?= ($currentView === 'forums' || $currentView === 'forum_topic') ? 'active' : '' ?>">
+        <span class="v3-bnav-indicator"></span>
+        <i class='bx bx-conversation'></i>
+        <span class="v3-bnav-label">Foros</span>
+    </a>
+</nav>
+
+<style>
+/* ── Bottom Nav: estructura fija al fondo ── */
+.v3-bottom-nav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 9000;
+    background: #ffffff;
+    border-top: 1px solid #f3f4f6;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+    height: 64px;
+    align-items: stretch;
+    justify-content: space-around;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ── Cada ítem ── */
+.v3-bnav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    text-decoration: none;
+    color: #9ca3af;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    transition: color 0.2s ease;
+    position: relative;
+    padding-top: 4px;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Indicador naranja superior */
+.v3-bnav-indicator {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%) scaleX(0);
+    width: 28px;
+    height: 3px;
+    background: linear-gradient(90deg, #FF6A00, #FFA500);
+    border-radius: 0 0 4px 4px;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Ícono */
+.v3-bnav-item i {
+    font-size: 1.35rem;
+    line-height: 1;
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+
+/* Label */
+.v3-bnav-label {
+    line-height: 1;
+    transition: color 0.2s ease;
+}
+
+/* ── Estado activo ── */
+.v3-bnav-item.active {
+    color: #FF6A00;
+}
+.v3-bnav-item.active .v3-bnav-indicator {
+    transform: translateX(-50%) scaleX(1);
+}
+.v3-bnav-item.active i {
+    transform: translateY(-1px);
+}
+
+/* ── Hover ── */
+.v3-bnav-item:not(.active):hover {
+    color: #6b7280;
+}
+
+/* ── Visible solo en móvil ── */
+@media (max-width: 1023px) {
+    .v3-nav-pills     { display: none !important; }
+    .v3-mobile-toggle { display: none !important; }
+    .v3-mobile-menu   { display: none !important; }
+    .v3-bottom-nav    { display: flex !important; }
+    body { padding-bottom: 70px !important; }
+}
+
+/* ── Oculto en escritorio ── */
+@media (min-width: 1024px) {
+    .v3-bottom-nav { display: none !important; }
+    body { padding-bottom: 0 !important; }
+}
+</style>
+<?php endif; ?>

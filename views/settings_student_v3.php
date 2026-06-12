@@ -73,6 +73,16 @@ if ($userRoleCheck === 'STUDENT') {
     }
 ?>
 
+<style>
+.v3-profile-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+.v3-profile-cols { display: grid; grid-template-columns: 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+.v3-profile-bottom { display: flex; flex-direction: column; gap: 1rem; align-items: center; text-align: center; justify-content: space-between; }
+@media (min-width: 1024px) {
+    .v3-profile-grid { grid-template-columns: 380px 1fr; }
+    .v3-profile-cols { grid-template-columns: 1fr 1fr; }
+    .v3-profile-bottom { flex-direction: row; text-align: left; }
+}
+</style>
 <div style="max-width:1920px;margin:0 auto;padding:1rem 1.5rem 2rem;">
 <div style="margin-bottom:1.5rem;">
 <h1 style="font-size:1.75rem;font-weight:700;color:#111827;margin:0;">Mi cuenta</h1>
@@ -84,7 +94,7 @@ if ($userRoleCheck === 'STUDENT') {
 <form method="POST">
 <input type="hidden" name="profile_action" value="update_profile">
 
-<div style="display:grid;grid-template-columns:380px 1fr;gap:1.5rem;">
+<div class="v3-profile-grid">
 <!-- LEFT: Avatar Card -->
 <div>
     <div style="background:white;border-radius:1rem;padding:2rem;border:1px solid #f3f4f6;text-align:center;margin-bottom:1.5rem;">
@@ -118,7 +128,7 @@ if ($userRoleCheck === 'STUDENT') {
         <div style="width:40px;height:40px;border-radius:12px;background:rgba(255,106,0,0.1);display:flex;align-items:center;justify-content:center;"><i class='bx bx-user' style="color:#FF6A00;font-size:1.25rem;"></i></div>
         <h3 style="font-size:1.125rem;font-weight:700;color:#111827;margin:0;">Datos Personales</h3>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+    <div class="v3-profile-cols">
         <div><label style="display:block;font-size:0.75rem;font-weight:700;color:#FF6A00;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Nombre</label><input type="text" name="firstName" value="<?=htmlspecialchars($firstName)?>" style="width:100%;padding:12px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;font-size:0.875rem;color:#111827;outline:none;" onfocus="this.style.borderColor='#FF6A00'" onblur="this.style.borderColor='#e5e7eb'"></div>
         <div><label style="display:block;font-size:0.75rem;font-weight:700;color:#FF6A00;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Apellido</label><input type="text" name="lastName" value="<?=htmlspecialchars($lastName)?>" style="width:100%;padding:12px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;font-size:0.875rem;color:#111827;outline:none;" onfocus="this.style.borderColor='#FF6A00'" onblur="this.style.borderColor='#e5e7eb'"></div>
     </div>
@@ -132,7 +142,7 @@ if ($userRoleCheck === 'STUDENT') {
         <h3 style="font-size:1.125rem;font-weight:700;color:#111827;margin:0;">Seguridad</h3>
     </div>
     <div style="margin-bottom:1.5rem;"><label style="display:block;font-size:0.75rem;font-weight:700;color:#FF6A00;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Contrase&ntilde;a Actual</label><input type="password" name="currentPassword" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" style="width:100%;padding:12px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;font-size:0.875rem;color:#111827;outline:none;" onfocus="this.style.borderColor='#FF6A00'" onblur="this.style.borderColor='#e5e7eb'"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+    <div class="v3-profile-cols" style="margin-bottom:0;">
         <div><label style="display:block;font-size:0.75rem;font-weight:700;color:#FF6A00;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Nueva Contrase&ntilde;a</label><input type="password" name="newPassword" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" style="width:100%;padding:12px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;font-size:0.875rem;color:#111827;outline:none;" onfocus="this.style.borderColor='#FF6A00'" onblur="this.style.borderColor='#e5e7eb'"></div>
         <div><label style="display:block;font-size:0.75rem;font-weight:700;color:#FF6A00;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Confirmar Nueva</label><input type="password" name="confirmPassword" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" style="width:100%;padding:12px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;font-size:0.875rem;color:#111827;outline:none;" onfocus="this.style.borderColor='#FF6A00'" onblur="this.style.borderColor='#e5e7eb'"></div>
     </div>
@@ -140,7 +150,7 @@ if ($userRoleCheck === 'STUDENT') {
 </div>
 
 <!-- Bottom Bar -->
-<div style="margin-top:1.5rem;padding:1rem 1.5rem;background:rgba(243,244,246,0.8);backdrop-filter:blur(8px);border-radius:1rem;display:flex;justify-content:space-between;align-items:center;">
+<div class="v3-profile-bottom" style="margin-top:1.5rem;padding:1rem 1.5rem;background:rgba(243,244,246,0.8);backdrop-filter:blur(8px);border-radius:1rem;">
     <p style="font-size:0.875rem;color:#6b7280;margin:0;">Guarda tus cambios antes de salir.</p>
     <div style="display:flex;gap:12px;">
         <a href="index.php?view=dashboard" style="padding:10px 24px;border:1px solid #e5e7eb;border-radius:12px;font-size:0.875rem;font-weight:600;color:#374151;text-decoration:none;background:white;">Cancelar</a>

@@ -48,21 +48,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $name = trim("$firstName $lastName");
             
             $email = trim($_POST['email'] ?? '');
+            $newId = generateCuid();
+            if (empty($email)) {
+                $email = "{$newId}@hubeurosoft.com";
+            }
+            
             $password = $_POST['password'] ?? '';
             $role = $_POST['role'] ?? 'STUDENT';
             $companyId = !empty($_POST['companyId']) ? $_POST['companyId'] : null;
             $buId = !empty($_POST['businessUnitId']) ? $_POST['businessUnitId'] : null;
             $trainingRoleIds = $_POST['trainingRoleIds'] ?? [];
 
-            if ($firstName && $email && $password) {
+            if ($firstName && $password && $email) {
+                $isDuplicateNick = false;
+                if (!empty($nickname)) {
+                    $nickQuery = "SELECT id FROM User WHERE nickname = ?";
+                    $nickParams = [$nickname];
+                    if ($buId) {
+                        $nickQuery .= " AND businessUnitId = ?";
+                        $nickParams[] = $buId;
+                    } elseif ($companyId) {
+                        $nickQuery .= " AND companyId = ? AND businessUnitId IS NULL";
+                        $nickParams[] = $companyId;
+                    } else {
+                        $nickQuery .= " AND companyId IS NULL AND businessUnitId IS NULL";
+                    }
+                    $stmtNick = $pdo->prepare($nickQuery);
+                    $stmtNick->execute($nickParams);
+                    if ($stmtNick->fetch()) {
+                        $isDuplicateNick = true;
+                    }
+                }
+
                 $stmtCheck = $pdo->prepare("SELECT id FROM User WHERE email = ?");
                 $stmtCheck->execute([$email]);
                 
-                if ($stmtCheck->fetch()) {
+                if ($isDuplicateNick) {
+                    $errorMsg = "El Nickname '$nickname' ya está en uso en esta Unidad/Empresa.";
+                } elseif ($stmtCheck->fetch()) {
                     $errorMsg = "El correo ya está registrado en otro usuario.";
                 } else {
                     $hash = password_hash($password, PASSWORD_BCRYPT);
-                    $newId = generateCuid();
+                    // $newId ya fue generado arriba
                     
                     $stmt = $pdo->prepare("INSERT INTO User (id, name, firstName, lastName, nickname, email, passwordHash, role, companyId, businessUnitId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
                     $stmt->execute([$newId, $name, $firstName, $lastName, $nickname, $email, $hash, $role, $companyId, $buId]);
@@ -90,6 +117,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $name = trim(trim($_POST['name'] ?? '') ?: trim("$firstName $lastName"));
             
             $email = trim($_POST['email'] ?? '');
+            if (empty($email)) {
+                $email = "{$id}@hubeurosoft.com";
+            }
+            
             $password = $_POST['password'] ?? '';
             $role = $_POST['role'] ?? 'STUDENT';
             $companyId = !empty($_POST['companyId']) ? $_POST['companyId'] : null;
@@ -97,9 +128,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $trainingRoleIds = $_POST['trainingRoleIds'] ?? [];
 
             if ($id && $firstName && $email) {
+                $isDuplicateNick = false;
+                if (!empty($nickname)) {
+                    $nickQuery = "SELECT id FROM User WHERE nickname = ? AND id != ?";
+                    $nickParams = [$nickname, $id];
+                    if ($buId) {
+                        $nickQuery .= " AND businessUnitId = ?";
+                        $nickParams[] = $buId;
+                    } elseif ($companyId) {
+                        $nickQuery .= " AND companyId = ? AND businessUnitId IS NULL";
+                        $nickParams[] = $companyId;
+                    } else {
+                        $nickQuery .= " AND companyId IS NULL AND businessUnitId IS NULL";
+                    }
+                    $stmtNick = $pdo->prepare($nickQuery);
+                    $stmtNick->execute($nickParams);
+                    if ($stmtNick->fetch()) {
+                        $isDuplicateNick = true;
+                    }
+                }
+
                 $stmtCheck = $pdo->prepare("SELECT id FROM User WHERE email = ? AND id != ?");
                 $stmtCheck->execute([$email, $id]);
-                if ($stmtCheck->fetch()) {
+                
+                if ($isDuplicateNick) {
+                    $errorMsg = "El Nickname '$nickname' ya está en uso en esta Unidad/Empresa.";
+                } elseif ($stmtCheck->fetch()) {
                     $errorMsg = "El correo ya está en uso.";
                 } else {
                     if ($password) {
@@ -144,10 +198,97 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         elseif ($action === 'delete') {
             $id = $_POST['user_id'] ?? '';
-            try { $pdo->prepare("DELETE FROM _TrainingRoleToUser WHERE B = ?")->execute([$id]); } catch(Exception $e){}
-            $stmt = $pdo->prepare("DELETE FROM User WHERE id = ?");
-            $stmt->execute([$id]);
-            $successMsg = "Usuario eliminado permanentemente del sistema.";
+            if ($id) {
+                $pdo->beginTransaction();
+                // Limpiar foros (cascade)
+                $stmtT2 = $pdo->prepare("SELECT id FROM ForumTopic WHERE authorId = ?");
+                $stmtT2->execute([$id]);
+                $tIds2 = $stmtT2->fetchAll(PDO::FETCH_COLUMN);
+                if (!empty($tIds2)) {
+                    $ph2 = str_repeat('?,', count($tIds2)-1) . '?';
+                    try { $pdo->prepare("DELETE FROM ForumReplyLike WHERE replyId IN (SELECT id FROM ForumReply WHERE topicId IN ($ph2))")->execute($tIds2); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM ForumReply WHERE topicId IN ($ph2)")->execute($tIds2); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM ForumTopicLike WHERE topicId IN ($ph2)")->execute($tIds2); } catch(Exception $e){}
+                }
+                $actTables = ['UserPoints','UserAchievement','usercertificate','CourseProgress','LessonProgress','TopicProgress','StudentAnswer','LoginLog','notification','ForumTopicLike','ForumReplyLike','ForumReplyHelpfulVote'];
+                foreach ($actTables as $tbl) { try { $pdo->prepare("DELETE FROM $tbl WHERE userId=?")->execute([$id]); } catch(Exception $e){} }
+                try { $pdo->prepare("DELETE FROM ForumReply WHERE authorId=?")->execute([$id]); } catch(Exception $e){}
+                try { $pdo->prepare("DELETE FROM ForumTopic WHERE authorId=?")->execute([$id]); } catch(Exception $e){}
+                try { $pdo->prepare("DELETE FROM _TrainingRoleToUser WHERE B=?")->execute([$id]); } catch(Exception $e){}
+                $pdo->prepare("DELETE FROM User WHERE id=?")->execute([$id]);
+                $pdo->commit();
+                $successMsg = "Usuario eliminado permanentemente del sistema.";
+            }
+        }
+        elseif ($action === 'reset_activity') {
+            $id       = $_POST['user_id'] ?? '';
+            $sections = $_POST['reset_sections'] ?? [];
+            if ($id && !empty($sections)) {
+                $pdo->beginTransaction();
+                if (in_array('progress', $sections)) {
+                    try { $pdo->prepare("DELETE FROM CourseProgress  WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM LessonProgress  WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM TopicProgress   WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM StudentAnswer   WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                }
+                if (in_array('points', $sections)) {
+                    try { $pdo->prepare("DELETE FROM UserPoints       WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM UserAchievement  WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("UPDATE User SET totalPoints=0, updatedAt=NOW() WHERE id=?")->execute([$id]); } catch(Exception $e){}
+                }
+                if (in_array('certificates', $sections)) {
+                    try { $pdo->prepare("DELETE FROM usercertificate  WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                }
+                if (in_array('forums', $sections)) {
+                    $stmtTF = $pdo->prepare("SELECT id FROM ForumTopic WHERE authorId=?");
+                    $stmtTF->execute([$id]);
+                    $topicIdsForum = $stmtTF->fetchAll(PDO::FETCH_COLUMN);
+                    if (!empty($topicIdsForum)) {
+                        $phF = str_repeat('?,', count($topicIdsForum)-1) . '?';
+                        try { $pdo->prepare("DELETE FROM ForumReplyLike WHERE replyId IN (SELECT id FROM ForumReply WHERE topicId IN ($phF))")->execute($topicIdsForum); } catch(Exception $e){}
+                        try { $pdo->prepare("DELETE FROM ForumReply WHERE topicId IN ($phF)")->execute($topicIdsForum); } catch(Exception $e){}
+                        try { $pdo->prepare("DELETE FROM ForumTopicLike WHERE topicId IN ($phF)")->execute($topicIdsForum); } catch(Exception $e){}
+                    }
+                    try { $pdo->prepare("DELETE FROM ForumTopicLike       WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM ForumReplyLike        WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM ForumReplyHelpfulVote WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM ForumReply  WHERE authorId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM ForumTopic  WHERE authorId=?")->execute([$id]); } catch(Exception $e){}
+                }
+                if (in_array('logs', $sections)) {
+                    try { $pdo->prepare("DELETE FROM LoginLog    WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM notification WHERE userId=?")->execute([$id]); } catch(Exception $e){}
+                }
+                $pdo->commit();
+                $successMsg = "Actividad del usuario reseteada exitosamente.";
+            } else {
+                $errorMsg = "Selecciona al menos una sección para resetear.";
+            }
+        }
+        elseif ($action === 'delete_bulk') {
+            $ids = array_filter($_POST['user_ids'] ?? []);
+            if (!empty($ids)) {
+                $ph = str_repeat('?,', count($ids)-1) . '?';
+                $pdo->beginTransaction();
+                // Foros cascade
+                $stmtTB = $pdo->prepare("SELECT id FROM ForumTopic WHERE authorId IN ($ph)");
+                $stmtTB->execute($ids);
+                $topicIdsBulk = $stmtTB->fetchAll(PDO::FETCH_COLUMN);
+                if (!empty($topicIdsBulk)) {
+                    $phT = str_repeat('?,', count($topicIdsBulk)-1) . '?';
+                    try { $pdo->prepare("DELETE FROM ForumReplyLike WHERE replyId IN (SELECT id FROM ForumReply WHERE topicId IN ($phT))")->execute($topicIdsBulk); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM ForumReply WHERE topicId IN ($phT)")->execute($topicIdsBulk); } catch(Exception $e){}
+                    try { $pdo->prepare("DELETE FROM ForumTopicLike WHERE topicId IN ($phT)")->execute($topicIdsBulk); } catch(Exception $e){}
+                }
+                $bulkTables = ['UserPoints','UserAchievement','usercertificate','CourseProgress','LessonProgress','TopicProgress','StudentAnswer','LoginLog','notification','ForumTopicLike','ForumReplyLike','ForumReplyHelpfulVote'];
+                foreach ($bulkTables as $tbl) { try { $pdo->prepare("DELETE FROM $tbl WHERE userId IN ($ph)")->execute($ids); } catch(Exception $e){} }
+                try { $pdo->prepare("DELETE FROM ForumReply WHERE authorId IN ($ph)")->execute($ids); } catch(Exception $e){}
+                try { $pdo->prepare("DELETE FROM ForumTopic WHERE authorId IN ($ph)")->execute($ids); } catch(Exception $e){}
+                try { $pdo->prepare("DELETE FROM _TrainingRoleToUser WHERE B IN ($ph)")->execute($ids); } catch(Exception $e){}
+                $pdo->prepare("DELETE FROM User WHERE id IN ($ph)")->execute($ids);
+                $pdo->commit();
+                $successMsg = count($ids) . " usuario(s) eliminados permanentemente del sistema.";
+            }
         }
         elseif ($action === 'import_csv') {
             if (isset($_FILES['csv_file']) && $_FILES['csv_file']['error'] === UPLOAD_ERR_OK) {
@@ -160,6 +301,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $handle = fopen($file, "r");
                 $rowNum = 0;
                 $imported = 0;
+                $skippedRows = []; // Para rastrear errores
                 
                 // Caches para reducir queries en bucle masivo
                 $cCache = []; $bCache = []; $trCache = [];
@@ -184,7 +326,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     $name = trim("$firstName $lastName");
                     
-                    if (!$email || !$firstName) continue;
+                    if (!$firstName) continue; // Email is no longer strictly required
                     
                     $compId = null;
                     if ($companyName) {
@@ -243,9 +385,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     if (!in_array($appRole, ['STUDENT','ADMIN','COMPANY_LEADER','BUSINESS_UNIT_LEADER'])) $appRole = 'STUDENT';
                     
-                    $stmtCheck = $pdo->prepare("SELECT id FROM User WHERE email = ?");
-                    $stmtCheck->execute([$email]);
-                    $ex = $stmtCheck->fetch();
+                    $ex = null;
+                    if (strpos($email, '@hubeurosoft.interno') === false && !empty(trim($data[3] ?? ''))) {
+                        $stmtCheck = $pdo->prepare("SELECT id FROM User WHERE email = ?");
+                        $stmtCheck->execute([$email]);
+                        $ex = $stmtCheck->fetch();
+                    }
+                    
+                    if (!$ex && !empty($nickname)) {
+                        $nickQuery = "SELECT id FROM User WHERE nickname = ?";
+                        $nickParams = [$nickname];
+                        if ($buId) {
+                            $nickQuery .= " AND businessUnitId = ?";
+                            $nickParams[] = $buId;
+                        } elseif ($compId) {
+                            $nickQuery .= " AND companyId = ? AND businessUnitId IS NULL";
+                            $nickParams[] = $compId;
+                        } else {
+                            $nickQuery .= " AND companyId IS NULL AND businessUnitId IS NULL";
+                        }
+                        $stmtNick = $pdo->prepare($nickQuery);
+                        $stmtNick->execute($nickParams);
+                        if ($stmtNick->fetch()) {
+                            $skippedRows[] = "Fila $rowNum: El nickname '$nickname' de $firstName ya está en uso.";
+                            continue;
+                        }
+                    }
                     
                     if ($ex) {
                         $uId = $ex['id'];
@@ -267,6 +432,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     } else {
                         $uId = generateCuid();
+                        if (empty($email)) {
+                            $email = "{$uId}@hubeurosoft.com";
+                        }
                         $realPass = $password ?: '123456';
                         $pdo->prepare("INSERT INTO User (id, name, firstName, lastName, nickname, email, passwordHash, role, companyId, businessUnitId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())")->execute([$uId, $name, $firstName, $lastName, $nickname, $email, password_hash($realPass, PASSWORD_BCRYPT), $appRole, $compId, $buId]);
                         foreach ($finalTrIds as $rId) {
@@ -277,6 +445,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 fclose($handle);
                 $successMsg = "Importación Completada: $imported perfiles procesados con éxito. Se generaron Empresas/Unidades automáticamente de ser necesario.";
+                
+                if (count($skippedRows) > 0) {
+                    $errorMsg = "Se omitieron " . count($skippedRows) . " registro(s) por conflictos de Nickname:<br>" . implode("<br>", array_slice($skippedRows, 0, 10)) . (count($skippedRows) > 10 ? "<br>...y otros más." : "");
+                }
             } else {
                 $errorMsg = "Error al leer el archivo CSV. Asegúrate de que el formato sea válido y no exceda los límites del servidor.";
             }
@@ -379,12 +551,15 @@ try {
     </div>
 </div>
 
-<main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: hidden; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 2rem;">
-    <div style="background: white; overflow: hidden; border-radius: 24px;">
+<main style="background: white; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); overflow: visible; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 2rem;">
+    <div style="background: white; overflow: visible; border-radius: 24px;">
     <div class="table-responsive" style="margin: 0; border: none;">
-        <table class="data-table">
+        <table class="data-table table-card-mode">
             <thead>
                 <tr>
+                    <th class="col-hide-mobile" style="width:40px; text-align:center;">
+                        <input type="checkbox" id="selectAllUsers" onchange="toggleSelectAll(this)" title="Seleccionar todos" style="width:16px;height:16px;cursor:pointer;">
+                    </th>
                     <th>Nombre y Contacto</th>
                     <th>Compañía Padre</th>
                     <th>Unidad Mapeada</th>
@@ -396,16 +571,22 @@ try {
             <tbody id="usersTableBody">
                 <?php if (count($users) > 0): ?>
                     <?php foreach ($users as $user): ?>
-                        <tr data-company="<?= htmlspecialchars(strtolower($user['companyName'] ?? '')) ?>" data-bu="<?= htmlspecialchars(strtolower($user['buName'] ?? '')) ?>">
-                            <td>
+                        <tr data-company="<?= htmlspecialchars(strtolower($user['companyName'] ?? '')) ?>" data-bu="<?= htmlspecialchars(strtolower($user['buName'] ?? '')) ?>" data-nickname="<?= htmlspecialchars(strtolower($user['nickname'] ?? '')) ?>">
+                            <td class="col-hide-mobile" style="text-align:center; padding: 0.5rem;">
+                                <input type="checkbox" name="user_ids[]" value="<?= htmlspecialchars($user['id']) ?>" class="user-row-check" onchange="updateBulkBar()" style="width:16px;height:16px;cursor:pointer;">
+                            </td>
+                            <td data-label="Nombre">
                                 <div style="font-weight: 500; color: var(--text-main);">
                                     <?= htmlspecialchars($user['name'] ?: 'Desconocido') ?>
                                 </div>
                                 <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
                                     <?= htmlspecialchars($user['email']) ?>
+                                    <?php if($user['nickname']): ?>
+                                    <span style="color:#f97316; margin-left:5px;">| <i class='bx bx-user'></i> <?= htmlspecialchars($user['nickname']) ?></span>
+                                    <?php endif; ?>
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Compañía">
                                 <?php if($user['companyName']): ?>
                                     <div style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(59, 130, 246, 0.1); color: #3b82f6; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem;">
                                         <i class='bx bx-buildings'></i> <?= htmlspecialchars($user['companyName']) ?>
@@ -414,7 +595,7 @@ try {
                                     <span style="color: #9ca3af; font-size: 0.85rem;">Independiente</span>
                                 <?php endif; ?>
                             </td>
-                            <td>
+                            <td data-label="Unidad">
                                 <?php if($user['buName']): ?>
                                     <div style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem;">
                                         <i class='bx bx-store-alt'></i> <?= htmlspecialchars($user['buName']) ?>
@@ -423,7 +604,7 @@ try {
                                     <span style="color: #9ca3af; font-size: 0.85rem;">X</span>
                                 <?php endif; ?>
                             </td>
-                            <td>
+                            <td data-label="Rol Formativo">
                                 <?php if($user['trainingRolesNames']): ?>
                                     <div style="display: inline-flex; flex-wrap: wrap; gap: 0.3rem;">
                                         <?php foreach(explode(', ', $user['trainingRolesNames']) as $trn): ?>
@@ -436,7 +617,7 @@ try {
                                     <span style="color: #9ca3af; font-size: 0.85rem;">Sin Perfil</span>
                                 <?php endif; ?>
                             </td>
-                            <td>
+                            <td data-label="Rol App">
                                 <?php 
                                     $mapRoles = [
                                         'ADMIN' => ['Admin', '#fce7f3', '#9d174d'],
@@ -457,8 +638,14 @@ try {
                                         title="Ver Avance de Cursos">
                                         <i class='bx bx-book-reader'></i>
                                     </button>
+
+                                    <button type="button" class="btn" style="padding: 0.4rem; background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa;"
+                                        onclick="openResetModal('<?= htmlspecialchars($user['id']) ?>', <?= htmlspecialchars(json_encode((string)($user['name'] ?: 'Usuario'))) ?>, <?= htmlspecialchars(json_encode((string)($user['email'] ?? ''))) ?>)"
+                                        title="Resetear Actividad">
+                                        <i class='bx bx-revision'></i>
+                                    </button>
                                     
-                                    <button class="btn" style="padding: 0.4rem; background: var(--bg-color); color: var(--text-muted);" 
+                                    <button type="button" class="btn" style="padding: 0.4rem; background: var(--bg-color); color: var(--text-muted);" 
                                         onclick="openEditUser( this.dataset )"
                                         data-id="<?= htmlspecialchars($user['id'] ?? '') ?>"
                                         data-name="<?= htmlspecialchars($user['name'] ?? '') ?>"
@@ -474,10 +661,10 @@ try {
                                         <i class='bx bx-edit'></i>
                                     </button>
                                     
-                                    <form method="POST" style="display:inline;" onsubmit="return confirm('¿Borrar a este usuario de la base de datos de manera irreversible? Se perderá todo su progreso.');">
+                                    <form method="POST" style="display:inline;" onsubmit="return confirm('¿Borrar a este usuario de forma irreversible? Se eliminará todo su historial y progreso.');">
                                         <input type="hidden" name="action" value="delete">
                                         <input type="hidden" name="user_id" value="<?= htmlspecialchars($user['id'] ?? '') ?>">
-                                        <button type="submit" class="btn" style="padding: 0.4rem; background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca;" title="Borrar Acceso">
+                                        <button type="submit" class="btn" style="padding: 0.4rem; background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca;" title="Borrar Usuario">
                                             <i class='bx bx-trash'></i>
                                         </button>
                                     </form>
@@ -486,7 +673,7 @@ try {
                         </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
-                    <tr><td colspan="6" style="text-align: center; padding: 4rem; color: var(--text-muted);">El registro de usuarios está vacío.</td></tr>
+                    <tr><td colspan="7" style="text-align: center; padding: 4rem; color: var(--text-muted);">El registro de usuarios está vacío.</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -494,11 +681,126 @@ try {
     </div>
 </main>
 
+<!-- Form oculto para eliminación masiva (poblado dinámicamente por JS) -->
+<form id="bulkDeleteForm" method="POST" style="display:none;">
+    <input type="hidden" name="action" value="delete_bulk">
+</form>
+
+<!-- Barra flotante de eliminación masiva -->
+<div id="bulkActionBar" style="
+    position: fixed; top: -80px; left: 50%; transform: translateX(-50%);
+    background: #1e293b; color: white; border-radius: 0 0 16px 16px;
+    padding: 0.75rem 1.5rem; display: flex; align-items: center; gap: 1rem;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25); z-index: 9999;
+    transition: top 0.35s cubic-bezier(0.34,1.56,0.64,1); white-space: nowrap;
+">
+    <span style="font-size:0.9rem; font-weight:600;">
+        <i class='bx bx-check-square' style="color:#6366f1; margin-right:4px;"></i>
+        <span id="bulkCount">0</span> usuario(s) seleccionado(s)
+    </span>
+    <button type="button" onclick="toggleSelectAll(document.getElementById('selectAllUsers'), true)" style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:#94a3b8; border-radius:8px; padding:0.4rem 0.8rem; font-size:0.8rem; cursor:pointer;">
+        <i class='bx bx-x'></i> Deseleccionar todo
+    </button>
+    <button type="button" onclick="confirmBulkDelete()" style="background:#ef4444; border:none; color:white; border-radius:8px; padding:0.4rem 1rem; font-size:0.85rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:0.4rem;">
+        <i class='bx bx-trash'></i> Eliminar <span id="bulkCountBtn">0</span> usuarios
+    </button>
+</div>
+
 <!-- ================= MODALES ================= -->
 <style>
     .two-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
     @media(max-width: 600px){ .two-cols { grid-template-columns: 1fr; } }
+    .reset-section-label {
+        display: flex; align-items: flex-start; gap: 0.75rem;
+        padding: 0.75rem; border-radius: 8px; cursor: pointer;
+        border: 1.5px solid #e5e7eb; margin-bottom: 0.5rem;
+        transition: border-color 0.15s, background 0.15s;
+    }
+    .reset-section-label:hover { background: #fafafa; border-color: #d1d5db; }
+    .reset-section-label input[type=checkbox] { width:18px; height:18px; margin-top:2px; flex-shrink:0; accent-color:#ea580c; }
+    .reset-section-label.danger-section { border-color: #fecaca; background: #fff5f5; }
+    .reset-section-label.danger-section:hover { background: #fee2e2; }
 </style>
+
+<!-- Modal: Reset de Actividad -->
+<div class="modal-overlay" id="modalReset">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header" style="border-bottom: 1px solid #f3f4f6; padding-bottom: 1rem;">
+            <h3 class="modal-title" style="display:flex; align-items:center; gap:0.5rem;">
+                <i class='bx bx-revision' style="color:#ea580c;"></i> Resetear Actividad
+            </h3>
+            <button class="modal-close" onclick="closeModal('modalReset')"><i class='bx bx-x'></i></button>
+        </div>
+        <form method="POST">
+            <input type="hidden" name="action" value="reset_activity">
+            <input type="hidden" name="user_id" id="reset_user_id" value="">
+
+            <div style="padding: 0.25rem 0 1rem;">
+                <div style="background:#fff7ed; border-radius:10px; padding:0.75rem 1rem; margin-bottom:1.25rem; display:flex; align-items:center; gap:0.6rem;">
+                    <i class='bx bx-user-circle' style="font-size:1.5rem; color:#ea580c; flex-shrink:0;"></i>
+                    <div>
+                        <div style="font-weight:700; color:#1e293b; font-size:0.95rem;" id="reset_user_name"></div>
+                        <div style="font-size:0.8rem; color:#78716c;" id="reset_user_email"></div>
+                    </div>
+                </div>
+
+                <p style="font-size:0.85rem; color:#6b7280; margin-bottom:1rem; font-weight:600;">Selecciona qué deseas resetear:</p>
+
+                <label class="reset-section-label">
+                    <input type="checkbox" name="reset_sections[]" value="progress" checked>
+                    <div>
+                        <div style="font-weight:600; color:#1e293b; font-size:0.9rem;"><i class='bx bx-book-open' style="color:#6366f1;"></i> Progreso de cursos</div>
+                        <div style="font-size:0.77rem; color:#9ca3af; margin-top:2px;">CourseProgress, LessonProgress, TopicProgress, StudentAnswer</div>
+                    </div>
+                </label>
+
+                <label class="reset-section-label">
+                    <input type="checkbox" name="reset_sections[]" value="points" checked>
+                    <div>
+                        <div style="font-weight:600; color:#1e293b; font-size:0.9rem;"><i class='bx bxs-star' style="color:#f59e0b;"></i> Puntos XP y Logros</div>
+                        <div style="font-size:0.77rem; color:#9ca3af; margin-top:2px;">UserPoints, UserAchievement, XP → 0</div>
+                    </div>
+                </label>
+
+                <label class="reset-section-label danger-section">
+                    <input type="checkbox" name="reset_sections[]" value="certificates">
+                    <div>
+                        <div style="font-weight:600; color:#b91c1c; font-size:0.9rem;"><i class='bx bx-certification'></i> Certificados emitidos <i class='bx bx-error-circle' style="color:#dc2626; font-size:0.9rem;"></i></div>
+                        <div style="font-size:0.77rem; color:#9ca3af; margin-top:2px;">usercertificate &mdash; Los certificados ya impresos seguirán existiendo fuera del sistema</div>
+                    </div>
+                </label>
+
+                <label class="reset-section-label danger-section">
+                    <input type="checkbox" name="reset_sections[]" value="forums">
+                    <div>
+                        <div style="font-weight:600; color:#b91c1c; font-size:0.9rem;"><i class='bx bx-conversation'></i> Publicaciones en Foros <i class='bx bx-error-circle' style="color:#dc2626; font-size:0.9rem;"></i></div>
+                        <div style="font-size:0.77rem; color:#9ca3af; margin-top:2px;">ForumTopic, ForumReply y sus likes &mdash; puede afectar respuestas de otros usuarios</div>
+                    </div>
+                </label>
+
+                <label class="reset-section-label">
+                    <input type="checkbox" name="reset_sections[]" value="logs">
+                    <div>
+                        <div style="font-weight:600; color:#1e293b; font-size:0.9rem;"><i class='bx bx-history' style="color:#64748b;"></i> Notificaciones y Log de accesos</div>
+                        <div style="font-size:0.77rem; color:#9ca3af; margin-top:2px;">notification, LoginLog</div>
+                    </div>
+                </label>
+            </div>
+
+            <div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px; padding: 0.75rem 1rem; font-size: 0.83rem; color: #92400e; margin-bottom: 1.25rem; display:flex; align-items: center; gap: 0.6rem;">
+                <i class='bx bx-error' style="font-size:1.2rem; color:#d97706; flex-shrink:0;"></i>
+                <span>Esta acción es <strong>irreversible</strong>. Los datos seleccionados se eliminarán permanentemente de la base de datos.</span>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 1rem;">
+                <button type="button" class="btn" style="background: var(--bg-color); color: var(--text-main);" onclick="closeModal('modalReset')">Cancelar</button>
+                <button type="submit" class="btn" style="background:#ea580c; color:white; font-weight:700; border:none;" onclick="return confirm('¿Confirmas el reset de la actividad seleccionada? Esta acción no se puede deshacer.');">
+                    <i class='bx bx-revision'></i> Confirmar Reset
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <!-- Modal: Crear Usuario -->
 <div class="modal-overlay" id="modalCreate">
@@ -524,11 +826,12 @@ try {
             <div class="two-cols">
                 <div class="form-group">
                     <label class="form-label">Apodo / Nickname (Opcional)</label>
-                    <input type="text" name="nickname" class="form-control">
+                    <input type="text" name="nickname" id="create_nickname" class="form-control" onkeyup="validateNickname('create')">
+                    <span id="create_nick_warning" style="display:none; color:#ef4444; font-size:0.75rem; margin-top:4px;"><i class='bx bx-error-circle'></i> El nickname ya está en uso.</span>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Correo (Login)</label>
-                    <input type="email" name="email" class="form-control" required autocomplete="off">
+                    <label class="form-label">Correo (Login) - Opcional</label>
+                    <input type="email" name="email" class="form-control" autocomplete="off" placeholder="usuario@empresa.com">
                 </div>
             </div>
             
@@ -553,7 +856,7 @@ try {
             <div class="two-cols">
                 <div class="form-group">
                     <label class="form-label">Vincular a un Cliente</label>
-                    <select name="companyId" id="create_company" class="form-control" onchange="updateBUDropdown('create_company', 'create_bu')">
+                    <select name="companyId" id="create_company" class="form-control" onchange="updateBUDropdown('create_company', 'create_bu'); validateNickname('create');">
                         <option value="">-- Sin Cliente (Autónomo) --</option>
                         <?php foreach($allCompanies as $c): ?>
                             <option value="<?= htmlspecialchars($c['id']) ?>"><?= htmlspecialchars($c['name']) ?></option>
@@ -562,7 +865,7 @@ try {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Vincular a Unidad (BU)</label>
-                    <select name="businessUnitId" id="create_bu" class="form-control">
+                    <select name="businessUnitId" id="create_bu" class="form-control" onchange="validateNickname('create');">
                         <option value="">-- Ignorar Rama --</option>
                         <!-- Opciones pobladas vía JavaScript -->
                     </select>
@@ -583,7 +886,7 @@ try {
 
             <div style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem;">
                 <button type="button" class="btn" style="background: var(--bg-color); color: var(--text-main);" onclick="closeModal('modalCreate')">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Registrar Usuario</button>
+                <button type="submit" id="create_submit_btn" class="btn btn-primary">Registrar Usuario</button>
             </div>
         </form>
     </div>
@@ -653,11 +956,12 @@ try {
             <div class="two-cols">
                 <div class="form-group">
                     <label class="form-label">Apodo / Nickname</label>
-                    <input type="text" name="nickname" id="edit_nickname" class="form-control">
+                    <input type="text" name="nickname" id="edit_nickname" class="form-control" onkeyup="validateNickname('edit')">
+                    <span id="edit_nick_warning" style="display:none; color:#ef4444; font-size:0.75rem; margin-top:4px;"><i class='bx bx-error-circle'></i> El nickname ya está en uso.</span>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Correo (Login)</label>
-                    <input type="email" name="email" id="edit_email" class="form-control" required autocomplete="off">
+                    <label class="form-label">Correo (Login) - Opcional</label>
+                    <input type="email" name="email" id="edit_email" class="form-control" autocomplete="off">
                 </div>
             </div>
             
@@ -682,7 +986,7 @@ try {
             <div class="two-cols">
                 <div class="form-group">
                     <label class="form-label">Empresa</label>
-                    <select name="companyId" id="edit_company" class="form-control" onchange="updateBUDropdown('edit_company', 'edit_bu')">
+                    <select name="companyId" id="edit_company" class="form-control" onchange="updateBUDropdown('edit_company', 'edit_bu'); validateNickname('edit');">
                         <option value="">-- Autónomo --</option>
                         <?php foreach($allCompanies as $c): ?>
                             <option value="<?= htmlspecialchars($c['id']) ?>"><?= htmlspecialchars($c['name']) ?></option>
@@ -691,7 +995,7 @@ try {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Rama / Unidad</label>
-                    <select name="businessUnitId" id="edit_bu" class="form-control">
+                    <select name="businessUnitId" id="edit_bu" class="form-control" onchange="validateNickname('edit');">
                         <option value="">-- Ignorar Rama --</option>
                         <!-- Opciones pobladas vía JavaScript -->
                     </select>
@@ -715,7 +1019,7 @@ try {
 
             <div style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem;">
                 <button type="button" class="btn" style="background: var(--bg-color); color: var(--text-main);" onclick="closeModal('modalEdit')">Descartar</button>
-                <button type="submit" class="btn btn-primary">Impactar Cambios</button>
+                <button type="submit" id="edit_submit_btn" class="btn btn-primary">Impactar Cambios</button>
             </div>
         </form>
     </div>
@@ -760,6 +1064,10 @@ try {
         // Forzar visibilidad suprema
         modal.style.zIndex = '999999';
     });
+
+    // Mover barra de acciones masivas al body para que position:fixed funcione correctamente
+    const bulkBar = document.getElementById('bulkActionBar');
+    if (bulkBar) document.body.appendChild(bulkBar);
 
     // openModal definida más abajo
 
@@ -868,11 +1176,13 @@ try {
         }
     }
 
-    function openModal(id) { 
+    function openModal(id) {
         if (id === 'modalCreate') {
             document.getElementById('create_company').value = '';
             document.querySelectorAll('#modalCreate input[type=checkbox]').forEach(cb => cb.checked = false);
             updateBUDropdown('create_company', 'create_bu');
+            if(document.getElementById('create_nick_warning')) document.getElementById('create_nick_warning').style.display = 'none';
+            if(document.getElementById('create_submit_btn')) document.getElementById('create_submit_btn').disabled = false;
         }
         let m = document.getElementById(id);
         m.classList.add('active');
@@ -909,6 +1219,9 @@ try {
         checkboxes.forEach(cb => {
             cb.checked = trArr.includes(cb.value);
         });
+        
+        if(document.getElementById('edit_nick_warning')) document.getElementById('edit_nick_warning').style.display = 'none';
+        if(document.getElementById('edit_submit_btn')) document.getElementById('edit_submit_btn').disabled = false;
         
         openModal('modalEdit');
     }
@@ -958,5 +1271,181 @@ try {
                 row.style.display = 'none';
             }
         });
+    }
+
+    let nickTimeout = null;
+    function validateNickname(mode) {
+        if (nickTimeout) clearTimeout(nickTimeout);
+        
+        let nickEl = document.getElementById(mode + '_nickname');
+        let warnEl = document.getElementById(mode + '_nick_warning');
+        let btnEl = document.getElementById(mode + '_submit_btn');
+        let compEl = document.getElementById(mode + '_company');
+        let buEl = document.getElementById(mode + '_bu');
+        let editId = mode === 'edit' ? document.getElementById('edit_id').value : '';
+        
+        if (!nickEl.value.trim()) {
+            warnEl.style.display = 'none';
+            btnEl.disabled = false;
+            return;
+        }
+
+        nickTimeout = setTimeout(() => {
+            let url = 'api_validate_nickname.php?nickname=' + encodeURIComponent(nickEl.value.trim()) + 
+                      '&companyId=' + encodeURIComponent(compEl.value) + 
+                      '&buId=' + encodeURIComponent(buEl.value);
+            if (editId) url += '&excludeId=' + encodeURIComponent(editId);
+            
+            fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                if (data.taken) {
+                    warnEl.style.display = 'block';
+                    btnEl.disabled = true;
+                } else {
+                    warnEl.style.display = 'none';
+                    btnEl.disabled = false;
+                }
+            })
+            .catch(e => console.error("Error validando nickname", e));
+        }, 500);
+    }
+
+    // Auto-búsqueda y filtros si hay parámetros en la URL
+    document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const searchQuery = urlParams.get('search');
+        const cParam = urlParams.get('c');
+        const uParam = urlParams.get('u');
+        
+        let shouldFilter = false;
+
+        if (cParam) {
+            let filterCompany = document.getElementById('filterCompany');
+            if (filterCompany) {
+                // Find matching option
+                for (let opt of filterCompany.options) {
+                    if (opt.textContent.trim().toLowerCase() === cParam.trim().toLowerCase() || opt.value === cParam.trim().toLowerCase()) {
+                        opt.selected = true;
+                        updateFilterBUDropdown();
+                        shouldFilter = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (uParam) {
+            let filterBU = document.getElementById('filterBU');
+            if (filterBU) {
+                for (let opt of filterBU.options) {
+                    // Extract just the BU name part (before parentheses)
+                    let textName = opt.textContent.split('(')[0].trim().toLowerCase();
+                    if (textName === uParam.trim().toLowerCase() || opt.value === uParam.trim().toLowerCase()) {
+                        opt.selected = true;
+                        shouldFilter = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (searchQuery) {
+            let searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.value = searchQuery;
+                shouldFilter = true;
+            }
+        }
+
+        if (shouldFilter) {
+            filterTable();
+            
+            if (searchQuery) {
+                // Intentar abrir el primer resultado automáticamente
+                setTimeout(() => {
+                    let rows = document.querySelectorAll('#usersTableBody tr');
+                    let foundBtn = null;
+                    for (let row of rows) {
+                        if (row.style.display !== 'none') {
+                            let rowText = row.innerText.toLowerCase();
+                            let nickname = row.getAttribute('data-nickname') || '';
+                            if (rowText.includes(searchQuery.toLowerCase().trim()) || nickname === searchQuery.toLowerCase().trim()) {
+                                let editBtn = row.querySelector('button[onclick^="openEditUser"]');
+                                if (editBtn) {
+                                    foundBtn = editBtn;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (foundBtn) {
+                        foundBtn.click();
+                    }
+                }, 400);
+            }
+        }
+    });
+
+    // ======== RESET DE ACTIVIDAD ========
+    function openResetModal(id, name, email) {
+        document.getElementById('reset_user_id').value = id;
+        document.getElementById('reset_user_name').textContent = name;
+        document.getElementById('reset_user_email').textContent = email;
+        // Resetear checkboxes a estado por defecto
+        document.querySelectorAll('#modalReset input[type=checkbox]').forEach(cb => {
+            cb.checked = ['progress', 'points'].includes(cb.value);
+        });
+        openModal('modalReset');
+    }
+
+    // ======== ELIMINACIÓN MASIVA ========
+    function toggleSelectAll(masterCb, forceUncheck = false) {
+        if (forceUncheck) masterCb.checked = false;
+        const checks = document.querySelectorAll('.user-row-check');
+        checks.forEach(cb => {
+            // Solo seleccionar filas visibles
+            const row = cb.closest('tr');
+            if (!row || row.style.display === 'none') return;
+            cb.checked = masterCb.checked;
+        });
+        updateBulkBar();
+    }
+
+    function updateBulkBar() {
+        const checked = document.querySelectorAll('.user-row-check:checked');
+        const bar = document.getElementById('bulkActionBar');
+        const count = checked.length;
+        document.getElementById('bulkCount').textContent = count;
+        document.getElementById('bulkCountBtn').textContent = count;
+        if (count > 0) {
+            bar.style.top = '0px';
+            const masterCb = document.getElementById('selectAllUsers');
+            const total = document.querySelectorAll('.user-row-check').length;
+            if (masterCb) masterCb.checked = (count === total);
+        } else {
+            bar.style.top = '-80px';
+            const masterCb = document.getElementById('selectAllUsers');
+            if (masterCb) masterCb.checked = false;
+        }
+    }
+
+    function confirmBulkDelete() {
+        const checked = document.querySelectorAll('.user-row-check:checked');
+        const count = checked.length;
+        if (count === 0) return;
+        if (!confirm(`¿Eliminar ${count} usuario(s) de forma permanente e irreversible? Se borrará todo su historial, progreso y actividad.`)) return;
+
+        const form = document.getElementById('bulkDeleteForm');
+        // Limpiar inputs anteriores (excepto action)
+        Array.from(form.querySelectorAll('input[name="user_ids[]"]')).forEach(el => el.remove());
+        checked.forEach(cb => {
+            const inp = document.createElement('input');
+            inp.type = 'hidden';
+            inp.name = 'user_ids[]';
+            inp.value = cb.value;
+            form.appendChild(inp);
+        });
+        form.submit();
     }
 </script>
