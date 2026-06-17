@@ -100,10 +100,30 @@ function getFinalizationRate($pdo, $whereFilter, $metricFilter) {
 
 // === KPI: Índice de Engagement ===
 function getEngagementStats($pdo, $whereFilter, $metricFilter) {
-    $active   = (int)$pdo->query("SELECT COUNT(*) FROM User WHERE ($whereFilter) AND ($metricFilter) AND lastLoginAt >= DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetchColumn();
-    $atRisk   = (int)$pdo->query("SELECT COUNT(*) FROM User WHERE ($whereFilter) AND ($metricFilter) AND lastLoginAt < DATE_SUB(NOW(), INTERVAL 7 DAY) AND lastLoginAt >= DATE_SUB(NOW(), INTERVAL 14 DAY)")->fetchColumn();
-    $inactive = (int)$pdo->query("SELECT COUNT(*) FROM User WHERE ($whereFilter) AND ($metricFilter) AND (lastLoginAt IS NULL OR lastLoginAt < DATE_SUB(NOW(), INTERVAL 14 DAY))")->fetchColumn();
-    return ['active' => $active, 'atRisk' => $atRisk, 'inactive' => $inactive];
+    $active   = (int)$pdo->query("SELECT COUNT(*) FROM User WHERE ($whereFilter) AND ($metricFilter) AND lastLoginAt >= DATE_SUB(NOW(), INTERVAL 3 DAY)")->fetchColumn();
+    $atRisk   = (int)$pdo->query("SELECT COUNT(*) FROM User WHERE ($whereFilter) AND ($metricFilter) AND lastLoginAt < DATE_SUB(NOW(), INTERVAL 3 DAY) AND lastLoginAt >= DATE_SUB(NOW(), INTERVAL 10 DAY)")->fetchColumn();
+    $inactive = (int)$pdo->query("SELECT COUNT(*) FROM User WHERE ($whereFilter) AND ($metricFilter) AND lastLoginAt IS NOT NULL AND lastLoginAt < DATE_SUB(NOW(), INTERVAL 10 DAY)")->fetchColumn();
+    $neverIn  = (int)$pdo->query("SELECT COUNT(*) FROM User WHERE ($whereFilter) AND ($metricFilter) AND lastLoginAt IS NULL")->fetchColumn();
+    return ['active' => $active, 'atRisk' => $atRisk, 'inactive' => $inactive, 'neverIn' => $neverIn];
+}
+
+// === KPI: Listas de usuarios por categoría de engagement ===
+function getEngagementUsers($pdo, $whereFilter, $metricFilter) {
+    $base = "SELECT name, email, lastLoginAt FROM User WHERE ($whereFilter) AND ($metricFilter)";
+    $active   = $pdo->query("$base AND lastLoginAt >= DATE_SUB(NOW(), INTERVAL 3 DAY) ORDER BY lastLoginAt DESC LIMIT 50")->fetchAll(PDO::FETCH_ASSOC);
+    $atRisk   = $pdo->query("$base AND lastLoginAt < DATE_SUB(NOW(), INTERVAL 3 DAY) AND lastLoginAt >= DATE_SUB(NOW(), INTERVAL 10 DAY) ORDER BY lastLoginAt DESC LIMIT 50")->fetchAll(PDO::FETCH_ASSOC);
+    $inactive = $pdo->query("$base AND lastLoginAt IS NOT NULL AND lastLoginAt < DATE_SUB(NOW(), INTERVAL 10 DAY) ORDER BY lastLoginAt ASC LIMIT 50")->fetchAll(PDO::FETCH_ASSOC);
+    $neverIn  = $pdo->query("$base AND lastLoginAt IS NULL ORDER BY name ASC LIMIT 50")->fetchAll(PDO::FETCH_ASSOC);
+    $fmt = function($rows) {
+        return array_map(function($r) {
+            return [
+                'name'      => $r['name'],
+                'email'     => $r['email'],
+                'lastLogin' => $r['lastLoginAt'] ? date('d/m/Y H:i', strtotime($r['lastLoginAt'])) : null
+            ];
+        }, $rows);
+    };
+    return ['active' => $fmt($active), 'atRisk' => $fmt($atRisk), 'inactive' => $fmt($inactive), 'neverIn' => $fmt($neverIn)];
 }
 
 // === KPI: Roles Críticos de Capacitación ===
@@ -142,7 +162,8 @@ $kpiLabel2 = "Usuarios Totales";
 $kpiLabel3 = "Cursos Completados";
 $kpiVal3 = null;
 $kpiFinalization  = ['pct' => 0, 'done' => 0, 'total' => 0];
-$engagementStats  = ['active' => 0, 'atRisk' => 0, 'inactive' => 0];
+$engagementStats  = ['active' => 0, 'atRisk' => 0, 'inactive' => 0, 'neverIn' => 0];
+$engagementUsers  = ['active' => [], 'atRisk' => [], 'inactive' => [], 'neverIn' => []];
 $criticalRolesData = [];
 $showKpiExtras    = false;
 
@@ -242,6 +263,7 @@ if ($qUserId) {
             : "u.companyId = '$qCompanyId' AND u.businessUnitId = '$qBuId'";
         $kpiFinalization   = getFinalizationRate($pdo, $buPF, $metricFilterUser);
         $engagementStats   = getEngagementStats($pdo, $buPF, $metricFilterUser);
+        $engagementUsers   = getEngagementUsers($pdo, $buPF, $metricFilterUser);
         $criticalRolesData = getCriticalRolesData($pdo, $buPF, $buAF);
 
         $topTitle = "Top 3 Alumnos Destacados (" . htmlspecialchars($buName) . ")";
@@ -371,6 +393,7 @@ if ($qUserId) {
         $showKpiExtras     = true;
         $kpiFinalization   = getFinalizationRate($pdo, "companyId = '$qCompanyId'", $metricFilterUser);
         $engagementStats   = getEngagementStats($pdo, "companyId = '$qCompanyId'", $metricFilterUser);
+        $engagementUsers   = getEngagementUsers($pdo, "companyId = '$qCompanyId'", $metricFilterUser);
         $criticalRolesData = getCriticalRolesData($pdo, "companyId = '$qCompanyId'", "u.companyId = '$qCompanyId'");
     }
 } else {
@@ -559,11 +582,12 @@ if ($qUserId) {
 
         <!-- Actividad Reciente — Barras Verticales -->
         <?php
-            $totalE   = $engagementStats['active'] + $engagementStats['atRisk'] + $engagementStats['inactive'];
-            $maxCount = max($engagementStats['active'], $engagementStats['atRisk'], $engagementStats['inactive'], 1);
+            $maxCount = max($engagementStats['active'], $engagementStats['atRisk'], $engagementStats['inactive'], $engagementStats['neverIn'], 1);
             $aBar = $engagementStats['active']   > 0 ? max(round(($engagementStats['active']   / $maxCount) * 100), 8) : 0;
             $rBar = $engagementStats['atRisk']   > 0 ? max(round(($engagementStats['atRisk']   / $maxCount) * 100), 8) : 0;
             $iBar = $engagementStats['inactive'] > 0 ? max(round(($engagementStats['inactive'] / $maxCount) * 100), 8) : 0;
+            $nBar = $engagementStats['neverIn']  > 0 ? max(round(($engagementStats['neverIn']  / $maxCount) * 100), 8) : 0;
+            $engUsersJson = json_encode($engagementUsers, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT);
         ?>
         <div style="background:white;border-radius:16px;border:1px solid #f1f5f9;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);padding:1.5rem;">
             <h3 style="font-size:0.95rem;font-weight:800;color:#0f172a;margin:0 0 1.2rem;display:flex;align-items:center;gap:0.5rem;">
@@ -572,50 +596,111 @@ if ($qUserId) {
             <!-- Barras verticales -->
             <div style="display:flex;align-items:flex-end;justify-content:space-around;height:96px;border-bottom:2px solid #f1f5f9;padding:0 8px;gap:8px;margin-bottom:0.6rem;">
                 <!-- Activos -->
-                <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%;">
+                <div onclick="engToggle('active')" style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%;cursor:pointer;" title="Ver activos">
                     <span style="font-size:1.05rem;font-weight:900;color:#16a34a;line-height:1;margin-bottom:5px;"><?= $engagementStats['active'] ?></span>
                     <?php if($aBar > 0): ?>
-                    <div style="width:70%;height:<?= $aBar ?>%;background:linear-gradient(180deg,#4ade80,#16a34a);border-radius:5px 5px 0 0;"></div>
+                    <div style="width:70%;height:<?= $aBar ?>%;background:linear-gradient(180deg,#4ade80,#16a34a);border-radius:5px 5px 0 0;transition:opacity 0.15s;" onmouseenter="this.style.opacity='0.75'" onmouseleave="this.style.opacity='1'"></div>
                     <?php else: ?>
                     <div style="width:70%;height:3px;background:#f1f5f9;border-radius:5px 5px 0 0;"></div>
                     <?php endif; ?>
                 </div>
-                <!-- En riesgo -->
-                <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%;">
+                <!-- En Riesgo -->
+                <div onclick="engToggle('atRisk')" style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%;cursor:pointer;" title="Ver en riesgo">
                     <span style="font-size:1.05rem;font-weight:900;color:#d97706;line-height:1;margin-bottom:5px;"><?= $engagementStats['atRisk'] ?></span>
                     <?php if($rBar > 0): ?>
-                    <div style="width:70%;height:<?= $rBar ?>%;background:linear-gradient(180deg,#fcd34d,#d97706);border-radius:5px 5px 0 0;"></div>
+                    <div style="width:70%;height:<?= $rBar ?>%;background:linear-gradient(180deg,#fcd34d,#d97706);border-radius:5px 5px 0 0;transition:opacity 0.15s;" onmouseenter="this.style.opacity='0.75'" onmouseleave="this.style.opacity='1'"></div>
                     <?php else: ?>
                     <div style="width:70%;height:3px;background:#f1f5f9;border-radius:5px 5px 0 0;"></div>
                     <?php endif; ?>
                 </div>
                 <!-- Inactivos -->
-                <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%;">
+                <div onclick="engToggle('inactive')" style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%;cursor:pointer;" title="Ver inactivos">
                     <span style="font-size:1.05rem;font-weight:900;color:#dc2626;line-height:1;margin-bottom:5px;"><?= $engagementStats['inactive'] ?></span>
                     <?php if($iBar > 0): ?>
-                    <div style="width:70%;height:<?= $iBar ?>%;background:linear-gradient(180deg,#f87171,#dc2626);border-radius:5px 5px 0 0;"></div>
+                    <div style="width:70%;height:<?= $iBar ?>%;background:linear-gradient(180deg,#f87171,#dc2626);border-radius:5px 5px 0 0;transition:opacity 0.15s;" onmouseenter="this.style.opacity='0.75'" onmouseleave="this.style.opacity='1'"></div>
+                    <?php else: ?>
+                    <div style="width:70%;height:3px;background:#f1f5f9;border-radius:5px 5px 0 0;"></div>
+                    <?php endif; ?>
+                </div>
+                <!-- Sin Registro -->
+                <div onclick="engToggle('neverIn')" style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%;cursor:pointer;" title="Ver sin registro">
+                    <span style="font-size:1.05rem;font-weight:900;color:#94a3b8;line-height:1;margin-bottom:5px;"><?= $engagementStats['neverIn'] ?></span>
+                    <?php if($nBar > 0): ?>
+                    <div style="width:70%;height:<?= $nBar ?>%;background:linear-gradient(180deg,#cbd5e1,#94a3b8);border-radius:5px 5px 0 0;transition:opacity 0.15s;" onmouseenter="this.style.opacity='0.75'" onmouseleave="this.style.opacity='1'"></div>
                     <?php else: ?>
                     <div style="width:70%;height:3px;background:#f1f5f9;border-radius:5px 5px 0 0;"></div>
                     <?php endif; ?>
                 </div>
             </div>
             <!-- Etiquetas eje X -->
-            <div style="display:flex;justify-content:space-around;padding:0 8px;gap:8px;margin-bottom:0.6rem;">
+            <div style="display:flex;justify-content:space-around;padding:0 8px;gap:8px;margin-bottom:0.75rem;">
                 <div style="flex:1;text-align:center;">
-                    <div style="font-size:0.62rem;font-weight:700;color:#15803d;text-transform:uppercase;">Activos</div>
-                    <div style="font-size:0.55rem;color:#94a3b8;margin-top:1px;">últ. 7 días</div>
+                    <div style="font-size:0.75rem;font-weight:700;color:#15803d;text-transform:uppercase;">Activos</div>
+                    <div style="font-size:0.68rem;color:#6b7280;margin-top:2px;">hasta 3 dias</div>
                 </div>
                 <div style="flex:1;text-align:center;">
-                    <div style="font-size:0.62rem;font-weight:700;color:#b45309;text-transform:uppercase;">En Riesgo</div>
-                    <div style="font-size:0.55rem;color:#94a3b8;margin-top:1px;">7-14 días</div>
+                    <div style="font-size:0.75rem;font-weight:700;color:#b45309;text-transform:uppercase;">En Riesgo</div>
+                    <div style="font-size:0.68rem;color:#6b7280;margin-top:2px;">4 a 10 dias</div>
                 </div>
                 <div style="flex:1;text-align:center;">
-                    <div style="font-size:0.62rem;font-weight:700;color:#b91c1c;text-transform:uppercase;">Inactivos</div>
-                    <div style="font-size:0.55rem;color:#94a3b8;margin-top:1px;">+14 días</div>
+                    <div style="font-size:0.75rem;font-weight:700;color:#b91c1c;text-transform:uppercase;">Inactivos</div>
+                    <div style="font-size:0.68rem;color:#6b7280;margin-top:2px;">mas de 10 dias</div>
+                </div>
+                <div style="flex:1;text-align:center;">
+                    <div style="font-size:0.75rem;font-weight:700;color:#475569;text-transform:uppercase;">Sin Registro</div>
+                    <div style="font-size:0.68rem;color:#6b7280;margin-top:2px;">nunca entraron</div>
                 </div>
             </div>
-            <div style="font-size:0.57rem;color:#cbd5e1;">Basado en último inicio de sesión</div>
+            <div style="font-size:0.7rem;color:#94a3b8;margin-top:0.2rem;display:flex;align-items:center;gap:0.3rem;">
+                <i class='bx bx-hand-up' style="font-size:0.8rem;"></i>
+                <span>Clic en una barra para ver la lista de alumnos</span>
+            </div>
+            <!-- Panel de detalle al hacer clic en barra -->
+            <div id="eng-detail-panel" style="display:none;margin-top:0.9rem;border-top:1px solid #f1f5f9;padding-top:0.75rem;"></div>
         </div>
+        <script>
+        (function(){
+            var data = <?= $engUsersJson ?>;
+            var cfg = {
+                active:   { label:'Activos (hasta 3 dias)',    color:'#15803d', bg:'#f0fdf4' },
+                atRisk:   { label:'En Riesgo (4 a 10 dias)',   color:'#b45309', bg:'#fffbeb' },
+                inactive: { label:'Inactivos (mas de 10 dias)',color:'#b91c1c', bg:'#fef2f2' },
+                neverIn:  { label:'Sin Registro (nunca)',       color:'#475569', bg:'#f8fafc' }
+            };
+            var current = null;
+            var panel = document.getElementById('eng-detail-panel');
+            window.engToggle = function(cat) {
+                if (current === cat) { panel.style.display = 'none'; current = null; return; }
+                current = cat;
+                var users = data[cat] || [];
+                var c = cfg[cat];
+                var html = '<div style="font-size:0.78rem;font-weight:700;color:' + c.color + ';margin-bottom:0.5rem;">' + c.label + ' — ' + users.length + ' alumno(s)</div>';
+                if (!users.length) {
+                    html += '<div style="font-size:0.8rem;color:#94a3b8;font-style:italic;">Sin alumnos en esta categoría.</div>';
+                } else {
+                    html += '<div style="max-height:200px;overflow-y:auto;border-radius:8px;border:1px solid #e5e7eb;">';
+                    html += '<table style="width:100%;border-collapse:collapse;font-size:0.75rem;">';
+                    html += '<thead><tr style="background:#f9fafb;position:sticky;top:0;">';
+                    html += '<th style="padding:5px 8px;text-align:left;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;">Alumno</th>';
+                    html += '<th style="padding:5px 8px;text-align:left;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;">Correo</th>';
+                    html += '<th style="padding:5px 8px;text-align:center;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Último Acceso</th>';
+                    html += '</tr></thead><tbody>';
+                    users.forEach(function(u, i) {
+                        var bg = i % 2 === 0 ? 'white' : '#fafafa';
+                        html += '<tr style="background:' + bg + ';border-bottom:1px solid #f3f4f6;">';
+                        html += '<td style="padding:4px 8px;font-weight:600;color:#1f2937;">' + (u.name || '—') + '</td>';
+                        html += '<td style="padding:4px 8px;color:#6b7280;">' + (u.email || '—') + '</td>';
+                        html += '<td style="padding:4px 8px;text-align:center;color:' + c.color + ';font-weight:700;white-space:nowrap;">' + (u.lastLogin || '—') + '</td>';
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table></div>';
+                }
+                panel.innerHTML = html;
+                panel.style.display = 'block';
+                panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            };
+        })();
+        </script>
     </div>
     <?php endif; ?>
     
