@@ -150,13 +150,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $checkYesterday->execute([$user['id']]);
                     if ($checkYesterday->fetchColumn() > 0) {
                         // Racha continua
-                        $pdo->prepare("UPDATE User SET streakCount = streakCount + 1 WHERE id = ?")->execute([$user['id']]);
+                        $pdo->prepare("UPDATE User SET streakCount = streakCount + 1, lastLoginAt = NOW() WHERE id = ?")->execute([$user['id']]);
                     } else {
                         // Racha se reinicia
-                        $pdo->prepare("UPDATE User SET streakCount = 1 WHERE id = ?")->execute([$user['id']]);
+                        $pdo->prepare("UPDATE User SET streakCount = 1, lastLoginAt = NOW() WHERE id = ?")->execute([$user['id']]);
                     }
                 }
                 // -------------------------------------------------------------
+                // Registrar último acceso siempre (independiente de la racha)
+                $pdo->prepare("UPDATE User SET lastLoginAt = NOW() WHERE id = ?")->execute([$user['id']]);
 
                 $stmtLog = $pdo->prepare("INSERT INTO LoginLog (id, userId, ipAddress, userAgent, createdAt) VALUES (?, ?, ?, ?, NOW())");
                 $stmtLog->execute([generateCuid(), $user['id'], trim($ip), substr($userAgent, 0, 500)]);
