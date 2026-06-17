@@ -655,8 +655,6 @@ if ($qUserId) {
                 <i class='bx bx-hand-up' style="font-size:0.8rem;"></i>
                 <span>Clic en una barra para ver la lista de alumnos</span>
             </div>
-            <!-- Panel de detalle al hacer clic en barra -->
-            <div id="eng-detail-panel" style="display:none;margin-top:0.9rem;border-top:1px solid #f1f5f9;padding-top:0.75rem;"></div>
         </div>
         <script>
         (function(){
@@ -668,39 +666,64 @@ if ($qUserId) {
                 neverIn:  { label:'Sin Registro (nunca)',       color:'#475569', bg:'#f8fafc' }
             };
             var current = null;
-            var panel = document.getElementById('eng-detail-panel');
+            document.addEventListener('DOMContentLoaded', function() {
+                var modal = document.getElementById('engModal');
+                if (!modal) return;
+                document.body.appendChild(modal);
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) engClose();
+                });
+            });
             window.engToggle = function(cat) {
-                if (current === cat) { panel.style.display = 'none'; current = null; return; }
+                if (current === cat) { engClose(); return; }
                 current = cat;
                 var users = data[cat] || [];
                 var c = cfg[cat];
-                var html = '<div style="font-size:0.78rem;font-weight:700;color:' + c.color + ';margin-bottom:0.5rem;">' + c.label + ' — ' + users.length + ' alumno(s)</div>';
+                var modal = document.getElementById('engModal');
+                var mc = modal.querySelector('.modal-content');
+                // Header con color de categoría
+                var html = '<div class="modal-header" style="background:' + c.bg + ';margin:-2rem -2rem 1.5rem;padding:1rem 1.5rem;border-radius:12px 12px 0 0;">';
+                html += '<div style="display:flex;align-items:center;gap:0.6rem;">';
+                html += '<div style="width:4px;height:26px;border-radius:4px;background:' + c.color + ';"></div>';
+                html += '<div>';
+                html += '<h3 class="modal-title" style="color:' + c.color + ';font-size:0.95rem;">' + c.label + '</h3>';
+                html += '<div style="font-size:0.75rem;color:#6b7280;margin-top:1px;">' + users.length + ' alumno(s) en esta categoría</div>';
+                html += '</div></div>';
+                html += '<button class="modal-close" onclick="engClose()"><i class="bx bx-x"></i></button>';
+                html += '</div>';
+                // Tabla
                 if (!users.length) {
-                    html += '<div style="font-size:0.8rem;color:#94a3b8;font-style:italic;">Sin alumnos en esta categoría.</div>';
+                    html += '<p style="color:#94a3b8;font-style:italic;">Sin alumnos en esta categoría.</p>';
                 } else {
-                    html += '<div style="max-height:200px;overflow-y:auto;border-radius:8px;border:1px solid #e5e7eb;">';
-                    html += '<table style="width:100%;border-collapse:collapse;font-size:0.75rem;">';
-                    html += '<thead><tr style="background:#f9fafb;position:sticky;top:0;">';
-                    html += '<th style="padding:5px 8px;text-align:left;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;">Alumno</th>';
-                    html += '<th style="padding:5px 8px;text-align:left;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;">Correo</th>';
-                    html += '<th style="padding:5px 8px;text-align:center;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Último Acceso</th>';
-                    html += '</tr></thead><tbody>';
+                    html += '<div class="table-responsive">';
+                    html += '<table class="data-table">';
+                    html += '<thead><tr><th>#</th><th>Alumno</th><th>Correo</th><th style="text-align:center;">Último Acceso</th></tr></thead><tbody>';
                     users.forEach(function(u, i) {
-                        var bg = i % 2 === 0 ? 'white' : '#fafafa';
-                        html += '<tr style="background:' + bg + ';border-bottom:1px solid #f3f4f6;">';
-                        html += '<td style="padding:4px 8px;font-weight:600;color:#1f2937;">' + (u.name || '—') + '</td>';
-                        html += '<td style="padding:4px 8px;color:#6b7280;">' + (u.email || '—') + '</td>';
-                        html += '<td style="padding:4px 8px;text-align:center;color:' + c.color + ';font-weight:700;white-space:nowrap;">' + (u.lastLogin || '—') + '</td>';
+                        html += '<tr>';
+                        html += '<td style="color:#94a3b8;font-size:0.8rem;width:1%;">' + (i + 1) + '</td>';
+                        html += '<td style="font-weight:600;color:var(--text-main);">' + (u.name || '—') + '</td>';
+                        html += '<td>' + (u.email || '—') + '</td>';
+                        html += '<td style="text-align:center;font-weight:700;color:' + c.color + ';white-space:nowrap;">' + (u.lastLogin || '—') + '</td>';
                         html += '</tr>';
                     });
                     html += '</tbody></table></div>';
                 }
-                panel.innerHTML = html;
-                panel.style.display = 'block';
-                panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                mc.innerHTML = html;
+                modal.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            };
+            window.engClose = function() {
+                var modal = document.getElementById('engModal');
+                modal.classList.remove('active');
+                document.body.style.overflow = '';
+                current = null;
             };
         })();
         </script>
+    </div>
+    <!-- Modal Actividad Reciente (sistema de modales) -->
+    <div class="modal-overlay" id="engModal">
+        <div class="modal-content" style="max-width:620px;"></div>
     </div>
     <?php endif; ?>
     
