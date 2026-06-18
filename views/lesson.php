@@ -105,10 +105,15 @@ for ($i = 0; $i < count($allLessonsFlat); $i++) {
     $isComp = !empty($progressMap[$lid]['isCompleted']);
     if ($isComp) $completedCount++;
 
-    if (!$previousCompleted && !$isComp) { $lockedIndexes[$i] = true; }
+    // DEMO: lecciones antes del rango se tratan como completadas para la cadena de candados
+    $isBeforeDemoStart = $hasDemoRange && $demoStartFlatIndex >= 0 && $i < $demoStartFlatIndex;
+    $effectivelyCompleted = $isComp || $isBeforeDemoStart;
+
+    if (!$previousCompleted && !$effectivelyCompleted) { $lockedIndexes[$i] = true; }
     if ($lessonIdQuery === $lid) { $activeLessonIndex = $i; }
-    if (!$lessonIdQuery && !$isComp && $previousCompleted) { $activeLessonIndex = $i; }
-    if (!$isComp) { $previousCompleted = false; }
+    // DEMO: no usar lecciones antes del rango como punto de entrada automatico
+    if (!$lessonIdQuery && !$isComp && $previousCompleted && !$isBeforeDemoStart) { $activeLessonIndex = $i; }
+    if (!$effectivelyCompleted) { $previousCompleted = false; }
 }
 
 $totalCount = count($allLessonsFlat);
