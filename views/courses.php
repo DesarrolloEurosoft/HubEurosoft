@@ -246,20 +246,18 @@ function parseRoles($rolesString) {
 
                         <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 1rem; margin-top: auto;">
                             <div style="display:flex; gap:0.4rem; align-items:center;">
-                                <form method="POST" style="margin: 0;" onsubmit="return confirm('\u00bfEliminar este curso y todo su contenido?');">
-                                    <input type="hidden" name="action" value="delete_course">
-                                    <input type="hidden" name="course_id" value="<?php echo htmlspecialchars($course['id']); ?>">
-                                    <button type="submit" style="background: none; border: none; padding: 0.5rem; color: #ef4444; cursor: pointer; border-radius: 8px; transition: background 0.2s;" onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='none'" title="Eliminar Curso">
-                                        <i class='bx bx-trash' style="font-size: 1.2rem;"></i>
-                                    </button>
-                                </form>
-                                <form method="POST" style="margin: 0;" onsubmit="return confirm('\u00bfDuplicar este curso con todo su contenido?');">
-                                    <input type="hidden" name="action" value="duplicate_course">
-                                    <input type="hidden" name="course_id" value="<?php echo htmlspecialchars($course['id']); ?>">
-                                    <button type="submit" style="background: none; border: none; padding: 0.5rem; color: #6366f1; cursor: pointer; border-radius: 8px; transition: background 0.2s;" onmouseover="this.style.background='#e0e7ff'" onmouseout="this.style.background='none'" title="Duplicar Curso">
-                                        <i class='bx bx-copy' style="font-size: 1.2rem;"></i>
-                                    </button>
-                                </form>
+                                <button type="button"
+                                    onclick="openDeleteModal('<?= htmlspecialchars(addslashes($course['id'])) ?>', '<?= htmlspecialchars(addslashes($course['title'])) ?>')"
+                                    style="background: none; border: none; padding: 0.5rem; color: #ef4444; cursor: pointer; border-radius: 8px; transition: background 0.2s;"
+                                    onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='none'" title="Eliminar Curso">
+                                    <i class='bx bx-trash' style="font-size: 1.2rem;"></i>
+                                </button>
+                                <button type="button"
+                                    onclick="openDuplicateModal('<?= htmlspecialchars(addslashes($course['id'])) ?>', '<?= htmlspecialchars(addslashes($course['title'])) ?>')"
+                                    style="background: none; border: none; padding: 0.5rem; color: #6366f1; cursor: pointer; border-radius: 8px; transition: background 0.2s;"
+                                    onmouseover="this.style.background='#e0e7ff'" onmouseout="this.style.background='none'" title="Duplicar Curso">
+                                    <i class='bx bx-copy' style="font-size: 1.2rem;"></i>
+                                </button>
                             </div>
 
                             <a href="index.php?view=course_workshop&id=<?php echo urlencode($course['id']); ?>" style="display: inline-flex; align-items: center; gap: 0.5rem; color: #4f46e5; text-decoration: none; padding: 0.6rem 1.2rem; border-radius: 10px; font-weight: 700; font-size: 0.85rem; background: #e0e7ff; transition: background 0.2s;" onmouseover="this.style.background='#c7d2fe'" onmouseout="this.style.background='#e0e7ff'">
@@ -273,7 +271,47 @@ function parseRoles($rolesString) {
     </main>
 </div>
 
-<!-- Modal: Crear Nuevo Curso -->
+<!-- Modal: Confirmar Duplicar Curso -->
+<div class="modal-overlay" id="modalDuplicateCourse">
+    <div class="modal-content" style="max-width:420px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Duplicar Curso</h3>
+            <button type="button" class="modal-close" onclick="closeModal('modalDuplicateCourse')"><i class='bx bx-x'></i></button>
+        </div>
+        <p style="margin:1rem 0 1.5rem; color:var(--text-muted); font-size:0.9rem;">
+            ¿Quieres duplicar el curso <strong id="duplicateCourseTitle"></strong>? Se creará una copia completa con todos sus módulos y lecciones.
+        </p>
+        <form method="POST" id="formDuplicateCourse">
+            <input type="hidden" name="action" value="duplicate_course">
+            <input type="hidden" name="course_id" id="duplicateCourseId">
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+                <button type="button" class="btn" style="background:var(--bg-color); color:var(--text-main); font-weight:600;" onclick="closeModal('modalDuplicateCourse')">No, cancelar</button>
+                <button type="submit" class="btn btn-primary" style="font-weight:700;">Sí, duplicar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Confirmar Eliminar Curso -->
+<div class="modal-overlay" id="modalDeleteCourse">
+    <div class="modal-content" style="max-width:420px;">
+        <div class="modal-header">
+            <h3 class="modal-title" style="color:#dc2626;">Eliminar Curso</h3>
+            <button type="button" class="modal-close" onclick="closeModal('modalDeleteCourse')"><i class='bx bx-x'></i></button>
+        </div>
+        <p style="margin:1rem 0 1.5rem; color:var(--text-muted); font-size:0.9rem;">
+            ¿Seguro que quieres eliminar <strong id="deleteCourseTitle"></strong>? Esta acción <strong>no se puede deshacer</strong>.
+        </p>
+        <form method="POST" id="formDeleteCourse">
+            <input type="hidden" name="action" value="delete_course">
+            <input type="hidden" name="course_id" id="deleteCourseId">
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+                <button type="button" class="btn" style="background:var(--bg-color); color:var(--text-main); font-weight:600;" onclick="closeModal('modalDeleteCourse')">No, cancelar</button>
+                <button type="submit" class="btn" style="background:#dc2626; color:#fff; font-weight:700;">Sí, eliminar</button>
+            </div>
+        </form>
+    </div>
+</div>
 <div class="modal-overlay" id="modalCreateCourse">
     <div class="modal-content" style="max-width: 500px; border-radius: 20px;">
         <div class="modal-header">
@@ -303,6 +341,17 @@ function parseRoles($rolesString) {
 <script>
     function openModal(id) { document.getElementById(id).classList.add('active'); }
     function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+    function openDuplicateModal(id, title) {
+        document.getElementById('duplicateCourseId').value = id;
+        document.getElementById('duplicateCourseTitle').textContent = title;
+        openModal('modalDuplicateCourse');
+    }
+    function openDeleteModal(id, title) {
+        document.getElementById('deleteCourseId').value = id;
+        document.getElementById('deleteCourseTitle').textContent = title;
+        openModal('modalDeleteCourse');
+    }
 </script>
 
 </style>

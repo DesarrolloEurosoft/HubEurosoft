@@ -9,7 +9,7 @@ if (!$courseId) {
 }
 
 // 1. Fetch Course
-$stmtC = $pdo->prepare("SELECT id, title, demoUntilLessonId FROM Course WHERE id = ?");
+$stmtC = $pdo->prepare("SELECT id, title, demoUntilLessonId, demoFromLessonId FROM Course WHERE id = ?");
 $stmtC->execute([$courseId]);
 $course = $stmtC->fetch(PDO::FETCH_ASSOC);
 if (!$course) { echo "<div style='padding: 2rem;'><h2>Error</h2><p>Curso no encontrado.</p></div>"; return; }
@@ -118,17 +118,33 @@ if (isset($lockedIndexes[$activeLessonIndex])) {
     }
 }
 
-// Demo paywall: calcular el índice límite
-$demoLimitFlatIndex = -1; // -1 = sin límite
-if (!empty($course['demoUntilLessonId']) && !$isAdmin) {
-    foreach ($allLessonsFlat as $dIdx => $dL) {
-        if ($dL['id'] === $course['demoUntilLessonId']) {
-            $demoLimitFlatIndex = $dIdx;
-            break;
+// Demo paywall: calcular índices de rango [inicio, fin]
+$demoLimitFlatIndex = -1; // -1 = sin límite superior
+$demoStartFlatIndex = -1; // -1 = sin límite inferior (desde L1)
+if (!$isAdmin) {
+    if (!empty($course['demoUntilLessonId'])) {
+        foreach ($allLessonsFlat as $dIdx => $dL) {
+            if ($dL['id'] === $course['demoUntilLessonId']) {
+                $demoLimitFlatIndex = $dIdx;
+                break;
+            }
+        }
+    }
+    if (!empty($course['demoFromLessonId'])) {
+        foreach ($allLessonsFlat as $dIdx => $dL) {
+            if ($dL['id'] === $course['demoFromLessonId']) {
+                $demoStartFlatIndex = $dIdx;
+                break;
+            }
         }
     }
 }
-$showPaywall = ($demoLimitFlatIndex >= 0 && $activeLessonIndex > $demoLimitFlatIndex);
+// Mostrar paywall si el curso tiene rango demo Y la lección activa está fuera del rango
+$hasDemoRange = ($demoLimitFlatIndex >= 0); // hay al menos límite superior
+$showPaywall = $hasDemoRange && (
+    ($demoStartFlatIndex >= 0 && $activeLessonIndex < $demoStartFlatIndex) ||
+    $activeLessonIndex > $demoLimitFlatIndex
+);
 
 $lesson = $allLessonsFlat[$activeLessonIndex] ?? null;
 if (!$lesson) {
@@ -146,8 +162,8 @@ $savedVideoProgress = (float)$lessonProgressData['videoProgress'];
 $prevLesson = $activeLessonIndex > 0 ? $allLessonsFlat[$activeLessonIndex - 1] : null;
 $nextLesson = $activeLessonIndex < count($allLessonsFlat) - 1 ? $allLessonsFlat[$activeLessonIndex + 1] : null;
 $isNextLocked = !$isLessonCompleted;
-// isNextDemo: se computa aqui porque depende de $nextLesson
-$isNextDemo = ($demoLimitFlatIndex >= 0 && $nextLesson !== null && ($activeLessonIndex >= $demoLimitFlatIndex));
+// isNextDemo: la siguiente lección está fuera del rango demo
+$isNextDemo = $hasDemoRange && $nextLesson !== null && ($activeLessonIndex >= $demoLimitFlatIndex);
 ?>
 
 <style>
@@ -361,7 +377,10 @@ $isNextDemo = ($demoLimitFlatIndex >= 0 && $nextLesson !== null && ($activeLesso
                         $comp = !empty($statusData['isCompleted']);
                         $isAct = ($flatIndex === $activeLessonIndex);
                         $isLoc = isset($lockedIndexes[$flatIndex]);
-                        $isDemo = ($demoLimitFlatIndex >= 0 && $flatIndex > $demoLimitFlatIndex);
+                        $isDemo = $hasDemoRange && (
+                            ($demoStartFlatIndex >= 0 && $flatIndex < $demoStartFlatIndex) ||
+                            $flatIndex > $demoLimitFlatIndex
+                        );
 
                         if ($isDemo) {
                             $iconClass = 'demo';
