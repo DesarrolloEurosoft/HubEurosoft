@@ -105,12 +105,7 @@ for ($i = 0; $i < count($allLessonsFlat); $i++) {
     $isComp = !empty($progressMap[$lid]['isCompleted']);
     if ($isComp) $completedCount++;
 
-    // ── DEMO: dentro del rango demo no se aplica candado secuencial ──
-    $inDemoRange = $hasDemoRange &&
-        ($demoStartFlatIndex < 0 || $i >= $demoStartFlatIndex) &&
-        $i <= $demoLimitFlatIndex;
-
-    if (!$previousCompleted && !$isComp && !$inDemoRange) { $lockedIndexes[$i] = true; }
+    if (!$previousCompleted && !$isComp) { $lockedIndexes[$i] = true; }
     if ($lessonIdQuery === $lid) { $activeLessonIndex = $i; }
     if (!$lessonIdQuery && !$isComp && $previousCompleted) { $activeLessonIndex = $i; }
     if (!$isComp) { $previousCompleted = false; }
@@ -399,11 +394,6 @@ $isNextDemo = $hasDemoRange && $nextLesson !== null && ($activeLessonIndex >= $d
                         if ($isDemo) {
                             $iconClass = 'demo';
                             $iconHtml  = "<i class='bx bxs-lock-alt'></i>";
-                            $href      = "index.php?view=lesson&course_id={$courseId}&lesson_id={$l['id']}";
-                        } elseif ($isInDemoRangeLesson) {
-                            // Dentro del rango demo: siempre clickeable, sin candado secuencial
-                            $iconClass = $comp ? 'completed' : ($isAct ? 'active' : 'unlocked');
-                            $iconHtml  = $comp ? "<i class='bx bx-check'></i>" : ($isAct ? ($idx+1) : ($idx+1));
                             $href      = "index.php?view=lesson&course_id={$courseId}&lesson_id={$l['id']}";
                         } else {
                             $iconClass = $comp ? 'completed' : ($isAct ? 'active' : 'locked');
