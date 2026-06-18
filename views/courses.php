@@ -143,12 +143,10 @@ $stmt = $pdo->query("
             JOIN TrainingRole tr ON c2tr.B = tr.id
             WHERE c2tr.A = c.id) as directRoles,
             
-           (SELECT GROUP_CONCAT(CONCAT(tr.id, '::', tr.name) SEPARATOR '||')
-            FROM LearningPathCourse lpc
-            JOIN LearningPath lp ON lpc.learningPathId = lp.id
-            JOIN _LearningPathToTrainingRole lp2tr ON lp.id = lp2tr.A
-            JOIN TrainingRole tr ON lp2tr.B = tr.id
-            WHERE lpc.courseId = c.id) as pathRoles
+           (SELECT GROUP_CONCAT(CONCAT(lp.id, '::', lp.name) SEPARATOR '||')
+             FROM LearningPathCourse lpc
+             JOIN LearningPath lp ON lpc.learningPathId = lp.id
+             WHERE lpc.courseId = c.id) as pathRoles
 
     FROM Course c
     ORDER BY c.createdAt DESC
@@ -162,8 +160,7 @@ function parseRoles($rolesString) {
     foreach ($pairs as $pair) {
         $parts = explode('::', $pair);
         if (count($parts) == 2) {
-            // Deduplicate by ID
-            $roles[$parts[0]] = $parts[1];
+            $roles[] = ['id' => $parts[0], 'name' => $parts[1]];
         }
     }
     return $roles;
@@ -205,15 +202,7 @@ function parseRoles($rolesString) {
             <?php if (count($courses) > 0): ?>
                 <?php foreach ($courses as $course): 
                     $directRoles = parseRoles($course['directRoles']);
-                    $pathRolesRaw = parseRoles($course['pathRoles']);
-                    
-                    // Deduplicate
-                    $pathRoles = [];
-                    foreach ($pathRolesRaw as $pid => $pname) {
-                        if (!isset($directRoles[$pid])) {
-                            $pathRoles[$pid] = $pname;
-                        }
-                    }
+                    $pathRoles = parseRoles($course['pathRoles']);
                 ?>
                     <div style="background: white; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; padding: 1.5rem; display: flex; flex-direction: column; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 10px 25px -5px rgba(0, 0, 0, 0.1)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px -1px rgba(0, 0, 0, 0.05)';">
                         
@@ -242,15 +231,15 @@ function parseRoles($rolesString) {
                         <div style="flex-grow: 1; margin-bottom: 1.5rem;">
                             <label style="font-size: 0.7rem; color: #94a3b8; font-weight: 800; text-transform: uppercase; margin-bottom: 0.5rem; display: block;">Perfiles Asignados</label>
                             <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
-                                <?php foreach ($directRoles as $rid => $rname): ?>
+                                <?php foreach ($directRoles as $r): ?>
                                     <span style="font-size: 0.65rem; font-weight: 800; background: #fff7ed; border: 1px solid #ffedd5; color: #ea580c; padding: 0.3rem 0.6rem; border-radius: 8px; display: inline-flex; align-items: center; gap: 4px;" title="Asignación Directa">
-                                        <span>👤</span> <?php echo mb_strtoupper(htmlspecialchars($rname)); ?>
+                                        <span>👤</span> <?php echo mb_strtoupper(htmlspecialchars($r['name'])); ?>
                                     </span>
                                 <?php endforeach; ?>
                                 
-                                <?php foreach ($pathRoles as $rid => $rname): ?>
+                                <?php foreach ($pathRoles as $r): ?>
                                     <span style="font-size: 0.65rem; font-weight: 800; background: #eff6ff; border: 1px solid #dbeafe; color: #2563eb; padding: 0.3rem 0.6rem; border-radius: 8px; display: inline-flex; align-items: center; gap: 4px;" title="Vía Ruta de Aprendizaje">
-                                        <span>🗺️</span> <?php echo mb_strtoupper(htmlspecialchars($rname)); ?>
+                                        <span>🗺️</span> <?php echo mb_strtoupper(htmlspecialchars($r['name'])); ?>
                                     </span>
                                 <?php endforeach; ?>
 
