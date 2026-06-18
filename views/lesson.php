@@ -9,7 +9,7 @@ if (!$courseId) {
 }
 
 // 1. Fetch Course
-$stmtC = $pdo->prepare("SELECT id, title, demoUntilLessonId FROM Course WHERE id = ?");
+$stmtC = $pdo->prepare("SELECT id, title, demoUntilLessonId, demoFromLessonId FROM Course WHERE id = ?");
 $stmtC->execute([$courseId]);
 $course = $stmtC->fetch(PDO::FETCH_ASSOC);
 if (!$course) { echo "<div style='padding: 2rem;'><h2>Error</h2><p>Curso no encontrado.</p></div>"; return; }
@@ -77,7 +77,24 @@ if (!empty($lessonIds)) {
     }
 }
 
-// 4. Activa y Bloqueos
+// 4. Demo range: calcular ANTES del loop de locks para usarlo en la lógica demo
+$demoLimitFlatIndex = -1; // -1 = sin límite superior
+$demoStartFlatIndex = -1; // -1 = sin límite inferior (desde L1)
+if (!$isAdmin) {
+    if (!empty($course['demoUntilLessonId'])) {
+        foreach ($allLessonsFlat as $dIdx => $dL) {
+            if ($dL['id'] === $course['demoUntilLessonId']) { $demoLimitFlatIndex = $dIdx; break; }
+        }
+    }
+    if (!empty($course['demoFromLessonId'])) {
+        foreach ($allLessonsFlat as $dIdx => $dL) {
+            if ($dL['id'] === $course['demoFromLessonId']) { $demoStartFlatIndex = $dIdx; break; }
+        }
+    }
+}
+$hasDemoRange = ($demoLimitFlatIndex >= 0);
+
+// 5. Activa y Bloqueos
 $activeLessonIndex = 0;
 $lockedIndexes = [];
 $previousCompleted = true;
@@ -87,10 +104,16 @@ for ($i = 0; $i < count($allLessonsFlat); $i++) {
     $lid = $allLessonsFlat[$i]['id'];
     $isComp = !empty($progressMap[$lid]['isCompleted']);
     if ($isComp) $completedCount++;
-    if (!$previousCompleted && !$isComp) { $lockedIndexes[$i] = true; }
+
+    // DEMO: lecciones antes del rango se tratan como completadas para la cadena de candados
+    $isBeforeDemoStart = $hasDemoRange && $demoStartFlatIndex >= 0 && $i < $demoStartFlatIndex;
+    $effectivelyCompleted = $isComp || $isBeforeDemoStart;
+
+    if (!$previousCompleted && !$effectivelyCompleted) { $lockedIndexes[$i] = true; }
     if ($lessonIdQuery === $lid) { $activeLessonIndex = $i; }
-    if (!$lessonIdQuery && !$isComp && $previousCompleted) { $activeLessonIndex = $i; }
-    if (!$isComp) { $previousCompleted = false; }
+    // DEMO: no usar lecciones antes del rango como punto de entrada automatico
+    if (!$lessonIdQuery && !$isComp && $previousCompleted && !$isBeforeDemoStart) { $activeLessonIndex = $i; }
+    if (!$effectivelyCompleted) { $previousCompleted = false; }
 }
 
 $totalCount = count($allLessonsFlat);
@@ -118,17 +141,15 @@ if (isset($lockedIndexes[$activeLessonIndex])) {
     }
 }
 
-// Demo paywall: calcular el índice límite
-$demoLimitFlatIndex = -1; // -1 = sin límite
-if (!empty($course['demoUntilLessonId']) && !$isAdmin) {
-    foreach ($allLessonsFlat as $dIdx => $dL) {
-        if ($dL['id'] === $course['demoUntilLessonId']) {
-            $demoLimitFlatIndex = $dIdx;
-            break;
-        }
-    }
+// ── DEMO: si activeLessonIndex cae antes del rango demo, auto-corregir al inicio del demo ──
+if ($hasDemoRange && $demoStartFlatIndex >= 0 && $activeLessonIndex < $demoStartFlatIndex) {
+    $activeLessonIndex = $demoStartFlatIndex;
 }
-$showPaywall = ($demoLimitFlatIndex >= 0 && $activeLessonIndex > $demoLimitFlatIndex);
+// Mostrar paywall si el curso tiene rango demo Y la lección activa está fuera del rango
+$showPaywall = $hasDemoRange && (
+    ($demoStartFlatIndex >= 0 && $activeLessonIndex < $demoStartFlatIndex) ||
+    $activeLessonIndex > $demoLimitFlatIndex
+);
 
 $lesson = $allLessonsFlat[$activeLessonIndex] ?? null;
 if (!$lesson) {
@@ -145,9 +166,13 @@ $isLessonCompleted = (bool)$lessonProgressData['isCompleted'];
 $savedVideoProgress = (float)$lessonProgressData['videoProgress'];
 $prevLesson = $activeLessonIndex > 0 ? $allLessonsFlat[$activeLessonIndex - 1] : null;
 $nextLesson = $activeLessonIndex < count($allLessonsFlat) - 1 ? $allLessonsFlat[$activeLessonIndex + 1] : null;
+// ── DEMO: la navegación libre es por sidebar; el botón Siguiente sigue requiriendo completar ──
+$isInDemoRange = $hasDemoRange &&
+    ($demoStartFlatIndex < 0 || $activeLessonIndex >= $demoStartFlatIndex) &&
+    $activeLessonIndex <= $demoLimitFlatIndex;
 $isNextLocked = !$isLessonCompleted;
-// isNextDemo: se computa aqui porque depende de $nextLesson
-$isNextDemo = ($demoLimitFlatIndex >= 0 && $nextLesson !== null && ($activeLessonIndex >= $demoLimitFlatIndex));
+// isNextDemo: la siguiente lección está fuera del rango demo
+$isNextDemo = $hasDemoRange && $nextLesson !== null && ($activeLessonIndex >= $demoLimitFlatIndex);
 ?>
 
 <style>
@@ -223,6 +248,7 @@ $isNextDemo = ($demoLimitFlatIndex >= 0 && $nextLesson !== null && ($activeLesso
     .l-icon.active { background: #f97316; color: white; box-shadow: 0 0 0 4px #fff7ed; }
     .l-icon.locked { background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; }
     .l-icon.demo   { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #d97706; border: 1px solid #fcd34d; }
+    .l-icon.unlocked { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
     .l-curr-item.demo-locked .l-curr-title { color: #d97706; font-style: italic; }
 
     /* Paywall card */
@@ -361,7 +387,14 @@ $isNextDemo = ($demoLimitFlatIndex >= 0 && $nextLesson !== null && ($activeLesso
                         $comp = !empty($statusData['isCompleted']);
                         $isAct = ($flatIndex === $activeLessonIndex);
                         $isLoc = isset($lockedIndexes[$flatIndex]);
-                        $isDemo = ($demoLimitFlatIndex >= 0 && $flatIndex > $demoLimitFlatIndex);
+                        $isDemo = $hasDemoRange && (
+                            ($demoStartFlatIndex >= 0 && $flatIndex < $demoStartFlatIndex) ||
+                            $flatIndex > $demoLimitFlatIndex
+                        );
+                        // ── DEMO: lección dentro del rango demo → siempre navegable ──
+                        $isInDemoRangeLesson = $hasDemoRange &&
+                            ($demoStartFlatIndex < 0 || $flatIndex >= $demoStartFlatIndex) &&
+                            $flatIndex <= $demoLimitFlatIndex;
 
                         if ($isDemo) {
                             $iconClass = 'demo';

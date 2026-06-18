@@ -20,6 +20,14 @@ if (!$courseId) {
 $successMsg = '';
 $errorMsg = '';
 
+// Asegurar que la columna demoFromLessonId existe (migracion automatica, solo corre 1 vez)
+try {
+    $colExists = $pdo->query("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Course' AND COLUMN_NAME='demoFromLessonId'")->fetchColumn();
+    if (!$colExists) {
+        $pdo->exec("ALTER TABLE Course ADD COLUMN demoFromLessonId VARCHAR(36) DEFAULT NULL AFTER demoUntilLessonId");
+    }
+} catch (Exception $_e) { /* silenciar */ }
+
 // Procesar Formularios Básicos
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -36,8 +44,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($title) {
             $demoUntilLessonId = !empty($_POST['demoUntilLessonId']) ? $_POST['demoUntilLessonId'] : null;
-            $stmt = $pdo->prepare("UPDATE Course SET title = ?, description = ?, certificateId = ?, demoUntilLessonId = ?, updatedAt = NOW() WHERE id = ?");
-            if ($stmt->execute([$title, $description, $certificateId, $demoUntilLessonId, $courseId])) {
+            $demoFromLessonId  = !empty($_POST['demoFromLessonId'])  ? $_POST['demoFromLessonId']  : null;
+            try {
+                $stmt = $pdo->prepare("UPDATE Course SET title = ?, description = ?, certificateId = ?, demoUntilLessonId = ?, demoFromLessonId = ?, updatedAt = NOW() WHERE id = ?");
+                $ok = $stmt->execute([$title, $description, $certificateId, $demoUntilLessonId, $demoFromLessonId, $courseId]);
+            } catch (Exception $_e) {
+                // Fallback sin demoFromLessonId si la columna aun no existe
+                $stmt = $pdo->prepare("UPDATE Course SET title = ?, description = ?, certificateId = ?, demoUntilLessonId = ?, updatedAt = NOW() WHERE id = ?");
+                $ok = $stmt->execute([$title, $description, $certificateId, $demoUntilLessonId, $courseId]);
+            }
+            if ($ok) {
                 
                 // Actualizar Roles Directos vinculados al curso
                 $pdo->prepare("DELETE FROM _CourseToTrainingRole WHERE A = ?")->execute([$courseId]);
@@ -302,9 +318,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // 1. Obtener Datos del Curso
-$stmt = $pdo->prepare("SELECT id, title, description, imageUrl, certificateId, demoUntilLessonId FROM Course WHERE id = ?");
-$stmt->execute([$courseId]);
-$course = $stmt->fetch(PDO::FETCH_ASSOC);
+try {
+    $stmt = $pdo->prepare("SELECT id, title, description, imageUrl, certificateId, demoUntilLessonId, demoFromLessonId FROM Course WHERE id = ?");
+    $stmt->execute([$courseId]);
+    $course = $stmt->fetch(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    // La columna demoFromLessonId aun no existe en esta BD (migracion pendiente)
+    $stmt = $pdo->prepare("SELECT id, title, description, imageUrl, certificateId, demoUntilLessonId FROM Course WHERE id = ?");
+    $stmt->execute([$courseId]);
+    $course = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($course) $course['demoFromLessonId'] = null;
+}
 
 if (!$course) { echo "<h2>Curso no encontrado</h2>"; exit; }
 
@@ -606,33 +630,66 @@ foreach ($modules as $dMod) {
                     <span style="font-size:1rem;">🎯</span>
                     <span style="font-size:0.75rem; font-weight:900; color:#d97706; text-transform:uppercase; letter-spacing:0.08em;">Vista Previa / Demo</span>
                 </div>
-                <p style="font-size:0.8rem; color:#92400e; margin:0 0 1rem 0; line-height:1.5;">Selecciona la <strong>última lección accesible</strong> sin membresía. Todo lo que sigue mostrará la pantalla de contacto.</p>
+                <p style="font-size:0.8rem; color:#92400e; margin:0 0 1rem 0; line-height:1.5;">Define el <strong>rango de lecciones accesibles</strong> sin membresía. Las lecciones fuera del rango mostrarán la pantalla de contacto.</p>
 
-                <div style="display:flex; flex-direction:column; gap:0.4rem; max-height:200px; overflow-y:auto; padding-right:4px;">
-                    <!-- Sin límite -->
-                    <label style="display:flex; align-items:center; gap:0.6rem; padding:0.5rem 0.7rem; border-radius:8px; cursor:pointer; background:<?= empty($course['demoUntilLessonId']) ? '#fef3c7' : 'white' ?>; border:1px solid <?= empty($course['demoUntilLessonId']) ? '#fcd34d' : '#e5e7eb' ?>;">
-                        <input type="radio" name="demoUntilLessonId" value="" <?= empty($course['demoUntilLessonId']) ? 'checked' : '' ?> style="accent-color:#f59e0b;">
-                        <span style="font-size:0.8rem; font-weight:700; color:#374151;">✅ Sin límite — Curso completo</span>
-                    </label>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
 
-                    <?php 
-                    $demoFlatNum = 0;
-                    foreach ($demoModules as $dModIdx => $dMod): ?>
-                        <div style="margin-top:0.4rem; font-size:0.65rem; font-weight:900; color:#9ca3af; text-transform:uppercase; letter-spacing:0.1em; padding:0 0.3rem;">Sección <?= $dModIdx+1 ?>: <?= htmlspecialchars($dMod['title']) ?></div>
-                        <?php foreach ($dMod['lessons'] as $dLesIdx => $dLes):
-                            $demoFlatNum++;
-                            $isSelected = ($course['demoUntilLessonId'] === $dLes['id']);
-                        ?>
-                        <label style="display:flex; align-items:center; gap:0.6rem; padding:0.4rem 0.7rem 0.4rem 1.2rem; border-radius:8px; cursor:pointer; background:<?= $isSelected ? '#fef3c7' : 'white' ?>; border:1px solid <?= $isSelected ? '#fcd34d' : '#f3f4f6' ?>;">
-                            <input type="radio" name="demoUntilLessonId" value="<?= htmlspecialchars($dLes['id']) ?>" <?= $isSelected ? 'checked' : '' ?> style="accent-color:#f59e0b;">
-                            <span style="font-size:0.78rem; color:#374151;"><span style="color:#d97706; font-weight:800;">L<?= $demoFlatNum ?></span> — <?= htmlspecialchars($dLes['title']) ?></span>
-                        </label>
-                        <?php endforeach; ?>
-                    <?php endforeach; ?>
+                    <!-- DESDE -->
+                    <div>
+                        <div style="font-size:0.65rem; font-weight:900; color:#d97706; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.5rem;">▶ Desde (inicio demo)</div>
+                        <div style="display:flex; flex-direction:column; gap:0.3rem; max-height:180px; overflow-y:auto; padding-right:4px;">
+                            <label style="display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0.6rem; border-radius:8px; cursor:pointer; background:<?= empty($course['demoFromLessonId']) ? '#fef3c7' : 'white' ?>; border:1px solid <?= empty($course['demoFromLessonId']) ? '#fcd34d' : '#f3f4f6' ?>;">
+                                <input type="radio" name="demoFromLessonId" value="" <?= empty($course['demoFromLessonId']) ? 'checked' : '' ?> style="accent-color:#f59e0b;">
+                                <span style="font-size:0.78rem; font-weight:700; color:#374151;">🏁 Desde el inicio (L1)</span>
+                            </label>
+                            <?php
+                            $fromFlatNum = 0;
+                            foreach ($demoModules as $dModIdx => $dMod): ?>
+                                <div style="font-size:0.6rem; font-weight:900; color:#9ca3af; text-transform:uppercase; padding:0.2rem 0.3rem;">S<?= $dModIdx+1 ?>: <?= htmlspecialchars($dMod['title']) ?></div>
+                                <?php foreach ($dMod['lessons'] as $dLes):
+                                    $fromFlatNum++;
+                                    $isSel = ($course['demoFromLessonId'] === $dLes['id']);
+                                ?>
+                                <label style="display:flex; align-items:center; gap:0.5rem; padding:0.35rem 0.6rem 0.35rem 1.1rem; border-radius:8px; cursor:pointer; background:<?= $isSel ? '#fef3c7' : 'white' ?>; border:1px solid <?= $isSel ? '#fcd34d' : '#f3f4f6' ?>;">
+                                    <input type="radio" name="demoFromLessonId" value="<?= htmlspecialchars($dLes['id']) ?>" <?= $isSel ? 'checked' : '' ?> style="accent-color:#f59e0b;">
+                                    <span style="font-size:0.75rem; color:#374151;"><span style="color:#d97706; font-weight:800;">L<?= $fromFlatNum ?></span> — <?= htmlspecialchars($dLes['title']) ?></span>
+                                </label>
+                                <?php endforeach; ?>
+                            <?php endforeach; ?>
+                            <?php if (empty($demoModules)): ?>
+                                <p style="font-size:0.75rem; color:#b45309; font-style:italic;">Sin lecciones aún.</p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
 
-                    <?php if (empty($demoModules)): ?>
-                        <p style="font-size:0.78rem; color:#b45309; font-style:italic;">Agrega módulos y lecciones al curso primero para poder configurar el límite de demo.</p>
-                    <?php endif; ?>
+                    <!-- HASTA -->
+                    <div>
+                        <div style="font-size:0.65rem; font-weight:900; color:#d97706; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.5rem;">⏹ Hasta (fin demo)</div>
+                        <div style="display:flex; flex-direction:column; gap:0.3rem; max-height:180px; overflow-y:auto; padding-right:4px;">
+                            <label style="display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0.6rem; border-radius:8px; cursor:pointer; background:<?= empty($course['demoUntilLessonId']) ? '#fef3c7' : 'white' ?>; border:1px solid <?= empty($course['demoUntilLessonId']) ? '#fcd34d' : '#f3f4f6' ?>;">
+                                <input type="radio" name="demoUntilLessonId" value="" <?= empty($course['demoUntilLessonId']) ? 'checked' : '' ?> style="accent-color:#f59e0b;">
+                                <span style="font-size:0.78rem; font-weight:700; color:#374151;">🔚 Sin límite — Curso completo</span>
+                            </label>
+                            <?php
+                            $untilFlatNum = 0;
+                            foreach ($demoModules as $dModIdx => $dMod): ?>
+                                <div style="font-size:0.6rem; font-weight:900; color:#9ca3af; text-transform:uppercase; padding:0.2rem 0.3rem;">S<?= $dModIdx+1 ?>: <?= htmlspecialchars($dMod['title']) ?></div>
+                                <?php foreach ($dMod['lessons'] as $dLes):
+                                    $untilFlatNum++;
+                                    $isSel = ($course['demoUntilLessonId'] === $dLes['id']);
+                                ?>
+                                <label style="display:flex; align-items:center; gap:0.5rem; padding:0.35rem 0.6rem 0.35rem 1.1rem; border-radius:8px; cursor:pointer; background:<?= $isSel ? '#fef3c7' : 'white' ?>; border:1px solid <?= $isSel ? '#fcd34d' : '#f3f4f6' ?>;">
+                                    <input type="radio" name="demoUntilLessonId" value="<?= htmlspecialchars($dLes['id']) ?>" <?= $isSel ? 'checked' : '' ?> style="accent-color:#f59e0b;">
+                                    <span style="font-size:0.75rem; color:#374151;"><span style="color:#d97706; font-weight:800;">L<?= $untilFlatNum ?></span> — <?= htmlspecialchars($dLes['title']) ?></span>
+                                </label>
+                                <?php endforeach; ?>
+                            <?php endforeach; ?>
+                            <?php if (empty($demoModules)): ?>
+                                <p style="font-size:0.75rem; color:#b45309; font-style:italic;">Sin lecciones aún.</p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
