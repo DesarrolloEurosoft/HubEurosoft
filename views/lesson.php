@@ -166,11 +166,11 @@ $isLessonCompleted = (bool)$lessonProgressData['isCompleted'];
 $savedVideoProgress = (float)$lessonProgressData['videoProgress'];
 $prevLesson = $activeLessonIndex > 0 ? $allLessonsFlat[$activeLessonIndex - 1] : null;
 $nextLesson = $activeLessonIndex < count($allLessonsFlat) - 1 ? $allLessonsFlat[$activeLessonIndex + 1] : null;
-// ── DEMO: dentro del rango demo el botón Siguiente nunca está bloqueado ──
+// ── DEMO: la navegación libre es por sidebar; el botón Siguiente sigue requiriendo completar ──
 $isInDemoRange = $hasDemoRange &&
     ($demoStartFlatIndex < 0 || $activeLessonIndex >= $demoStartFlatIndex) &&
     $activeLessonIndex <= $demoLimitFlatIndex;
-$isNextLocked = !$isLessonCompleted && !$isInDemoRange;
+$isNextLocked = !$isLessonCompleted;
 // isNextDemo: la siguiente lección está fuera del rango demo
 $isNextDemo = $hasDemoRange && $nextLesson !== null && ($activeLessonIndex >= $demoLimitFlatIndex);
 ?>
