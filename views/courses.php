@@ -98,6 +98,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
+                // 5. Copiar perfiles asignados (_CourseToTrainingRole)
+                $srcRoles = $pdo->prepare("SELECT B FROM _CourseToTrainingRole WHERE A = ?");
+                $srcRoles->execute([$srcId]);
+                $roles = $srcRoles->fetchAll(PDO::FETCH_COLUMN);
+                foreach ($roles as $roleId) {
+                    $pdo->prepare("INSERT IGNORE INTO _CourseToTrainingRole (A, B) VALUES (?, ?)")
+                       ->execute([$newCourseId, $roleId]);
+                }
+
                 $pdo->commit();
                 // Redirigir directo al Workshop del nuevo curso
                 echo "<script>window.location.href = 'index.php?view=course_workshop&id=" . urlencode($newCourseId) . "';</script>";
