@@ -77,7 +77,24 @@ if (!empty($lessonIds)) {
     }
 }
 
-// 4. Activa y Bloqueos
+// 4. Demo range: calcular ANTES del loop de locks para usarlo en la lógica demo
+$demoLimitFlatIndex = -1; // -1 = sin límite superior
+$demoStartFlatIndex = -1; // -1 = sin límite inferior (desde L1)
+if (!$isAdmin) {
+    if (!empty($course['demoUntilLessonId'])) {
+        foreach ($allLessonsFlat as $dIdx => $dL) {
+            if ($dL['id'] === $course['demoUntilLessonId']) { $demoLimitFlatIndex = $dIdx; break; }
+        }
+    }
+    if (!empty($course['demoFromLessonId'])) {
+        foreach ($allLessonsFlat as $dIdx => $dL) {
+            if ($dL['id'] === $course['demoFromLessonId']) { $demoStartFlatIndex = $dIdx; break; }
+        }
+    }
+}
+$hasDemoRange = ($demoLimitFlatIndex >= 0);
+
+// 5. Activa y Bloqueos
 $activeLessonIndex = 0;
 $lockedIndexes = [];
 $previousCompleted = true;
@@ -87,7 +104,13 @@ for ($i = 0; $i < count($allLessonsFlat); $i++) {
     $lid = $allLessonsFlat[$i]['id'];
     $isComp = !empty($progressMap[$lid]['isCompleted']);
     if ($isComp) $completedCount++;
-    if (!$previousCompleted && !$isComp) { $lockedIndexes[$i] = true; }
+
+    // ── DEMO: dentro del rango demo no se aplica candado secuencial ──
+    $inDemoRange = $hasDemoRange &&
+        ($demoStartFlatIndex < 0 || $i >= $demoStartFlatIndex) &&
+        $i <= $demoLimitFlatIndex;
+
+    if (!$previousCompleted && !$isComp && !$inDemoRange) { $lockedIndexes[$i] = true; }
     if ($lessonIdQuery === $lid) { $activeLessonIndex = $i; }
     if (!$lessonIdQuery && !$isComp && $previousCompleted) { $activeLessonIndex = $i; }
     if (!$isComp) { $previousCompleted = false; }
@@ -118,29 +141,11 @@ if (isset($lockedIndexes[$activeLessonIndex])) {
     }
 }
 
-// Demo paywall: calcular índices de rango [inicio, fin]
-$demoLimitFlatIndex = -1; // -1 = sin límite superior
-$demoStartFlatIndex = -1; // -1 = sin límite inferior (desde L1)
-if (!$isAdmin) {
-    if (!empty($course['demoUntilLessonId'])) {
-        foreach ($allLessonsFlat as $dIdx => $dL) {
-            if ($dL['id'] === $course['demoUntilLessonId']) {
-                $demoLimitFlatIndex = $dIdx;
-                break;
-            }
-        }
-    }
-    if (!empty($course['demoFromLessonId'])) {
-        foreach ($allLessonsFlat as $dIdx => $dL) {
-            if ($dL['id'] === $course['demoFromLessonId']) {
-                $demoStartFlatIndex = $dIdx;
-                break;
-            }
-        }
-    }
+// ── DEMO: si activeLessonIndex cae antes del rango demo, auto-corregir al inicio del demo ──
+if ($hasDemoRange && $demoStartFlatIndex >= 0 && $activeLessonIndex < $demoStartFlatIndex) {
+    $activeLessonIndex = $demoStartFlatIndex;
 }
 // Mostrar paywall si el curso tiene rango demo Y la lección activa está fuera del rango
-$hasDemoRange = ($demoLimitFlatIndex >= 0); // hay al menos límite superior
 $showPaywall = $hasDemoRange && (
     ($demoStartFlatIndex >= 0 && $activeLessonIndex < $demoStartFlatIndex) ||
     $activeLessonIndex > $demoLimitFlatIndex
@@ -161,7 +166,11 @@ $isLessonCompleted = (bool)$lessonProgressData['isCompleted'];
 $savedVideoProgress = (float)$lessonProgressData['videoProgress'];
 $prevLesson = $activeLessonIndex > 0 ? $allLessonsFlat[$activeLessonIndex - 1] : null;
 $nextLesson = $activeLessonIndex < count($allLessonsFlat) - 1 ? $allLessonsFlat[$activeLessonIndex + 1] : null;
-$isNextLocked = !$isLessonCompleted;
+// ── DEMO: dentro del rango demo el botón Siguiente nunca está bloqueado ──
+$isInDemoRange = $hasDemoRange &&
+    ($demoStartFlatIndex < 0 || $activeLessonIndex >= $demoStartFlatIndex) &&
+    $activeLessonIndex <= $demoLimitFlatIndex;
+$isNextLocked = !$isLessonCompleted && !$isInDemoRange;
 // isNextDemo: la siguiente lección está fuera del rango demo
 $isNextDemo = $hasDemoRange && $nextLesson !== null && ($activeLessonIndex >= $demoLimitFlatIndex);
 ?>
@@ -239,6 +248,7 @@ $isNextDemo = $hasDemoRange && $nextLesson !== null && ($activeLessonIndex >= $d
     .l-icon.active { background: #f97316; color: white; box-shadow: 0 0 0 4px #fff7ed; }
     .l-icon.locked { background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; }
     .l-icon.demo   { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #d97706; border: 1px solid #fcd34d; }
+    .l-icon.unlocked { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
     .l-curr-item.demo-locked .l-curr-title { color: #d97706; font-style: italic; }
 
     /* Paywall card */
@@ -381,10 +391,19 @@ $isNextDemo = $hasDemoRange && $nextLesson !== null && ($activeLessonIndex >= $d
                             ($demoStartFlatIndex >= 0 && $flatIndex < $demoStartFlatIndex) ||
                             $flatIndex > $demoLimitFlatIndex
                         );
+                        // ── DEMO: lección dentro del rango demo → siempre navegable ──
+                        $isInDemoRangeLesson = $hasDemoRange &&
+                            ($demoStartFlatIndex < 0 || $flatIndex >= $demoStartFlatIndex) &&
+                            $flatIndex <= $demoLimitFlatIndex;
 
                         if ($isDemo) {
                             $iconClass = 'demo';
                             $iconHtml  = "<i class='bx bxs-lock-alt'></i>";
+                            $href      = "index.php?view=lesson&course_id={$courseId}&lesson_id={$l['id']}";
+                        } elseif ($isInDemoRangeLesson) {
+                            // Dentro del rango demo: siempre clickeable, sin candado secuencial
+                            $iconClass = $comp ? 'completed' : ($isAct ? 'active' : 'unlocked');
+                            $iconHtml  = $comp ? "<i class='bx bx-check'></i>" : ($isAct ? ($idx+1) : ($idx+1));
                             $href      = "index.php?view=lesson&course_id={$courseId}&lesson_id={$l['id']}";
                         } else {
                             $iconClass = $comp ? 'completed' : ($isAct ? 'active' : 'locked');
