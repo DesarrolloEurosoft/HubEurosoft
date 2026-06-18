@@ -107,6 +107,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                        ->execute([$newCourseId, $roleId]);
                 }
 
+                // 6. Copiar rutas de aprendizaje (LearningPathCourse) — origen de los perfiles en la card
+                $srcPaths = $pdo->prepare("SELECT learningPathId, `order` FROM LearningPathCourse WHERE courseId = ?");
+                $srcPaths->execute([$srcId]);
+                $paths = $srcPaths->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($paths as $path) {
+                    $pdo->prepare("INSERT IGNORE INTO LearningPathCourse (learningPathId, courseId, `order`) VALUES (?, ?, ?)")
+                       ->execute([$path['learningPathId'], $newCourseId, $path['order']]);
+                }
+
                 $pdo->commit();
                 // Redirigir directo al Workshop del nuevo curso
                 echo "<script>window.location.href = 'index.php?view=course_workshop&id=" . urlencode($newCourseId) . "';</script>";
